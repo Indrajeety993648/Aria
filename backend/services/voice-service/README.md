@@ -27,7 +27,9 @@ HTTP surface:
 
 - STT returns a canned `VoiceTranscript` from a small pool of realistic phrases
   (e.g. "hey ARIA what's on my calendar", "reply to Priya that I'll be late").
-- TTS emits a silent 100 ms 16-kHz mono 16-bit PCM WAV.
+- TTS now streams by sentence/clause so `/ws/tts` can start audio emission early.
+- Partial STT websocket messages also include lightweight intent hints so the
+  orchestrator can start routing before the final transcript lands.
 - Zero network calls, zero model weights, zero optional deps. Always works.
 
 ### Real mode (`MOCK_VOICE=0` and `ARIA_DOWNLOAD_MODELS=1`)
@@ -36,6 +38,21 @@ HTTP surface:
 - TTS: [`piper-tts`](https://github.com/rhasspy/piper) streaming synthesis.
 - Backends are lazy-loaded on first request; the service starts healthy even if
   the weights are absent — it only errors on first real-use.
+
+Blueprint alignment notes:
+
+- If you want the blueprint STT baseline, set `WHISPER_MODEL=large-v3-turbo`.
+- The repo currently ships piper-backed TTS; sentence-level streaming is now in
+  place, but the edge-tts / Coqui XTTS swap-in remains an explicit follow-up.
+- Local mock streaming benchmark on this machine for `"hello. world. how are you?"`:
+  first chunk `0.000024s`, total `0.000043s`, `3` chunks.
+- The exact blueprint stack latency numbers are not yet published in-repo;
+  current mock streaming emits a chunk per sentence/clause and the websocket
+  starts sending as soon as the first segment is rendered.
+
+The websocket STT path still uses a simple energy VAD and keyword intent hints;
+the blueprint wake-word detector and exact production voice stack remain open
+items.
 
 ## How to run
 

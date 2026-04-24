@@ -16,6 +16,9 @@ class VoiceTranscript(BaseModel):
     start_ms: int = Field(ge=0, default=0)
     end_ms: int = Field(ge=0, default=0)
     lang: str = "en"
+    intent_id: int | None = None
+    intent_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    intent_source: str | None = None
 
 
 class TTSRequest(BaseModel):

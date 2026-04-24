@@ -13,6 +13,8 @@ from typing import AsyncIterator
 
 from aria_contracts.voice import TTSRequest, VoiceChunk, VoiceTranscript
 
+from .streaming import split_text_segments
+
 # Realistic canned utterances — cycled deterministically.
 _CANNED_PHRASES: tuple[str, ...] = (
     "hey ARIA what's on my calendar",
@@ -78,17 +80,21 @@ class MockSTT:
 
 
 class MockTTS:
-    """Emit a single silent 100 ms PCM chunk per request, is_last=True."""
+    """Emit silent 100 ms PCM chunks per text segment."""
 
     async def synth(self, req: TTSRequest) -> AsyncIterator[VoiceChunk]:
         async def _gen() -> AsyncIterator[VoiceChunk]:
-            pcm = silent_pcm_bytes()
-            yield VoiceChunk(
-                session_id=req.session_id,
-                seq=0,
-                audio_b64=base64.b64encode(pcm).decode("ascii"),
-                sample_rate=MOCK_SAMPLE_RATE,
-                is_last=True,
-            )
+            segments = split_text_segments(req.text)
+            if not segments:
+                segments = [""]
+            for seq, _segment in enumerate(segments):
+                pcm = silent_pcm_bytes()
+                yield VoiceChunk(
+                    session_id=req.session_id,
+                    seq=seq,
+                    audio_b64=base64.b64encode(pcm).decode("ascii"),
+                    sample_rate=MOCK_SAMPLE_RATE,
+                    is_last=seq == len(segments) - 1,
+                )
 
         return _gen()

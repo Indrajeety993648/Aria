@@ -20,6 +20,7 @@ dependencies = [
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27"]
 llm = ["anthropic>=0.34"]
 policy = ["onnxruntime>=1.17", "numpy>=1.26"]
+nlp = ["onnxruntime>=1.17", "numpy>=1.26"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

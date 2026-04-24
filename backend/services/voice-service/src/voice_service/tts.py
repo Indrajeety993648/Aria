@@ -15,6 +15,8 @@ from typing import Any, AsyncIterator
 
 from aria_contracts.voice import TTSRequest, VoiceChunk
 
+from .streaming import split_text_segments
+
 
 class TTS:
     """piper-tts wrapper. Voice loads lazily on first `synth`."""
@@ -53,32 +55,39 @@ class TTS:
         # 20 ms @ sample_rate, 16-bit mono
         chunk_bytes = int(sample_rate * 0.02) * 2
 
-        def _render() -> bytes:
-            buf = io.BytesIO()
-            with wave.open(buf, "wb") as w:
-                w.setnchannels(1)
-                w.setsampwidth(2)
-                w.setframerate(sample_rate)
-                piper.synthesize(req.text, w)
-            buf.seek(0)
-            with wave.open(buf, "rb") as r:
-                return r.readframes(r.getnframes())
+        async def _render_segment(segment_text: str) -> bytes:
+            def _render() -> bytes:
+                buf = io.BytesIO()
+                with wave.open(buf, "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(sample_rate)
+                    piper.synthesize(segment_text, w)
+                buf.seek(0)
+                with wave.open(buf, "rb") as r:
+                    return r.readframes(r.getnframes())
 
-        pcm = await asyncio.to_thread(_render)
+            return await asyncio.to_thread(_render)
 
         async def _gen() -> AsyncIterator[VoiceChunk]:
-            total = len(pcm)
+            segments = split_text_segments(req.text)
             seq = 0
-            for i in range(0, total, chunk_bytes):
-                piece = pcm[i : i + chunk_bytes]
-                is_last = (i + chunk_bytes) >= total
-                yield VoiceChunk(
-                    session_id=req.session_id,
-                    seq=seq,
-                    audio_b64=base64.b64encode(piece).decode("ascii"),
-                    sample_rate=sample_rate,
-                    is_last=is_last,
-                )
-                seq += 1
+            if not segments:
+                return
+
+            for segment_index, segment_text in enumerate(segments):
+                pcm = await _render_segment(segment_text)
+                total = len(pcm)
+                for offset in range(0, total, chunk_bytes):
+                    piece = pcm[offset : offset + chunk_bytes]
+                    is_last = segment_index == len(segments) - 1 and (offset + chunk_bytes) >= total
+                    yield VoiceChunk(
+                        session_id=req.session_id,
+                        seq=seq,
+                        audio_b64=base64.b64encode(piece).decode("ascii"),
+                        sample_rate=sample_rate,
+                        is_last=is_last,
+                    )
+                    seq += 1
 
         return _gen()

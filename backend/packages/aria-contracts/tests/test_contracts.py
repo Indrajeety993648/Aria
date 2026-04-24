@@ -146,7 +146,13 @@ def test_tool_call_result_is_optional():
 
 
 def test_voice_transcript_round_trip():
-    t = VoiceTranscript(session_id="s1", text="hello")
+    t = VoiceTranscript(
+        session_id="s1",
+        text="hello",
+        intent_id=3,
+        intent_confidence=0.7,
+        intent_source="heuristic",
+    )
     restored = VoiceTranscript.model_validate_json(t.model_dump_json())
     assert restored == t
 

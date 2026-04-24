@@ -7,6 +7,7 @@ from typing import Any
 from aria_contracts.voice import TTSRequest, VoiceTranscript
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .intent import classify_partial_intent
 from .vad import EnergyVAD
 
 router = APIRouter()
@@ -66,6 +67,7 @@ async def ws_stt(websocket: WebSocket) -> None:
                 partial = await stt.transcribe(
                     bytes(buffer), sample_rate=16000, lang=lang, session_id=session_id
                 )
+                hint = classify_partial_intent(partial.text)
                 # Force is_final=False for partials.
                 partial_msg = VoiceTranscript(
                     session_id=partial.session_id,
@@ -75,6 +77,9 @@ async def ws_stt(websocket: WebSocket) -> None:
                     start_ms=0,
                     end_ms=partial.end_ms,
                     lang=partial.lang,
+                    intent_id=hint.intent_id,
+                    intent_confidence=hint.confidence,
+                    intent_source=hint.source,
                 )
                 await websocket.send_text(partial_msg.model_dump_json())
                 last_partial_at = len(buffer)
@@ -90,6 +95,7 @@ async def ws_stt(websocket: WebSocket) -> None:
     final = await stt.transcribe(
         bytes(buffer), sample_rate=16000, lang=lang, session_id=session_id
     )
+    hint = classify_partial_intent(final.text)
     final = VoiceTranscript(
         session_id=final.session_id,
         text=final.text,
@@ -98,6 +104,9 @@ async def ws_stt(websocket: WebSocket) -> None:
         start_ms=0,
         end_ms=final.end_ms,
         lang=final.lang,
+        intent_id=hint.intent_id,
+        intent_confidence=hint.confidence,
+        intent_source=hint.source,
     )
     try:
         await websocket.send_text(final.model_dump_json())

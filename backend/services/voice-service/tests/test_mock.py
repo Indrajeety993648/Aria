@@ -121,6 +121,14 @@ def test_ws_stt_emits_transcript(client: TestClient) -> None:
     assert finals[-1]["text"].strip() != ""
 
 
+def test_voice_intent_hint_from_partial_text() -> None:
+    from voice_service.intent import classify_partial_intent
+
+    hint = classify_partial_intent("reply to Priya that I'll be late")
+    assert hint.intent_id is not None
+    assert hint.confidence >= 0.5
+
+
 def test_ws_tts_streams_chunks(client: TestClient) -> None:
     with client.websocket_connect("/ws/tts") as ws:
         ws.send_text(
