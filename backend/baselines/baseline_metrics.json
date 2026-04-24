@@ -1,0 +1,52 @@
+{
+  "env_name": "aria-personal-manager-v1",
+  "env_version": "0.1.0",
+  "evaluation_setup": {
+    "n_episodes_per_cell": 20,
+    "difficulty": "medium",
+    "max_steps": 50,
+    "note": "Numbers below are means over 20 episodes per (policy, category) cell. Seeded deterministically 0..19. Reproduce with `make grade`."
+  },
+  "policies": {
+    "do_nothing": "Always emits action_id=13 (WAIT). Demonstrates the reward floor.",
+    "random": "Uniform sample from the 15 actions; target selected from observation when applicable. Demonstrates a non-trivial baseline.",
+    "expert": "Hand-crafted per-category heuristic policy. Demonstrates the environment is learnable and reward shaping is sensible."
+  },
+  "per_policy_overall_mean": {
+    "do_nothing": -1.759,
+    "random":     -0.289,
+    "expert":     +0.793
+  },
+  "per_policy_per_category": {
+    "do_nothing": {
+      "calendar_conflict": -0.330,
+      "email_triage":      -4.525,
+      "message_reply":     -4.575,
+      "dinner_planning":   -0.256,
+      "delegation":        -0.653,
+      "shopping":          -0.214
+    },
+    "random": {
+      "calendar_conflict": +0.374,
+      "email_triage":      -0.302,
+      "message_reply":     -0.687,
+      "dinner_planning":   -0.581,
+      "delegation":        -0.574,
+      "shopping":          +0.038
+    },
+    "expert": {
+      "calendar_conflict": +0.650,
+      "email_triage":      +1.024,
+      "message_reply":     +0.914,
+      "dinner_planning":   +0.494,
+      "delegation":        +1.294,
+      "shopping":          +0.384
+    }
+  },
+  "expert_over_random_relative_gain": 3.748,
+  "notes": [
+    "The large do_nothing penalty on email_triage and message_reply comes from ignoring urgent messages from close contacts — the `relationship_health` and `user_satisfaction` dimensions sum to meaningful negatives over a full episode.",
+    "A competent PPO agent should land between random and expert at minimum; well-trained agents should beat the scripted expert by exploiting combinations (batch_action for noise + draft_reply for urgent) that the rule-based expert uses monotonically.",
+    "All six scenario categories are solvable — no unsolvable edge cases. If a seed produces an anomalously low expert score (<0), file an issue with the seed."
+  ]
+}

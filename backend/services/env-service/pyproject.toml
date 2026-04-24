@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "env-service"
+version = "0.1.0"
+description = "ARIA — OpenEnv RL environment `aria-personal-manager-v1` (FastAPI HTTP server)."
+requires-python = ">=3.11"
+dependencies = [
+    "aria-contracts>=0.1,<0.2",
+    "aria-scenarios>=0.1,<0.2",
+    "aria-rewards>=0.1,<0.2",
+    "openenv-core>=0.1",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7,<3",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-service"
+version = "0.1.0"
+description = "ARIA — Voice pipeline (STT + TTS) FastAPI service. Mock-mode by default; real backends opt-in."
+requires-python = ">=3.11"
+dependencies = [
+    "aria-contracts>=0.1,<0.2",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.7,<3",
+    "numpy>=1.26",
+    "websockets>=12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+real = [
+    "faster-whisper>=1.0",
+    "piper-tts>=1.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

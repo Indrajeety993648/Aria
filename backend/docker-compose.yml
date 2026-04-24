@@ -1,0 +1,155 @@
+# ARIA — docker-compose topology
+#
+# Every service builds from its own Dockerfile under services/.
+# aria-contracts, aria-scenarios, aria-rewards are copied as build context
+# into services that need them (a shared build context pattern).
+#
+# Mock mode (default) runs fully offline with zero external dependencies.
+
+name: aria
+
+x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  MOCK_VOICE: "${MOCK_VOICE:-1}"
+  MOCK_LLM: "${MOCK_LLM:-1}"
+
+services:
+  # ---------------------------------------------------------------------------
+  # env-service — the hackathon deliverable. Stands alone.
+  # ---------------------------------------------------------------------------
+  env-service:
+    build:
+      context: ..
+      dockerfile: backend/services/env-service/Dockerfile
+    image: aria/env-service:0.1.0
+    container_name: aria-env
+    environment:
+      <<: *common-env
+      ARIA_ENV_NAME: "${ARIA_ENV_NAME:-aria-personal-manager-v1}"
+      ARIA_ENV_MAX_STEPS: "${ARIA_ENV_MAX_STEPS:-50}"
+      ARIA_ENV_DEFAULT_DIFFICULTY: "${ARIA_ENV_DEFAULT_DIFFICULTY:-medium}"
+    ports:
+      - "${ENV_SERVICE_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # memory-service — Qdrant + SQLite, four namespaces
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: aria-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  memory-service:
+    build:
+      context: ..
+      dockerfile: backend/services/memory-service/Dockerfile
+    image: aria/memory-service:0.1.0
+    container_name: aria-memory
+    environment:
+      <<: *common-env
+      QDRANT_URL: "http://qdrant:6333"
+      MEMORY_SQLITE_PATH: "/data/aria.db"
+    volumes:
+      - memory-data:/data
+    ports:
+      - "${MEMORY_PORT:-8004}:8004"
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # voice-service — STT + TTS
+  # ---------------------------------------------------------------------------
+  voice-service:
+    build:
+      context: ..
+      dockerfile: backend/services/voice-service/Dockerfile
+    image: aria/voice-service:0.1.0
+    container_name: aria-voice
+    environment:
+      <<: *common-env
+      ARIA_DOWNLOAD_MODELS: "${ARIA_DOWNLOAD_MODELS:-0}"
+    ports:
+      - "${VOICE_PORT:-8003}:8003"
+    volumes:
+      - voice-models:/models
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # orchestrator-service — the agent loop
+  # ---------------------------------------------------------------------------
+  orchestrator-service:
+    build:
+      context: ..
+      dockerfile: backend/services/orchestrator-service/Dockerfile
+    image: aria/orchestrator-service:0.1.0
+    container_name: aria-orchestrator
+    environment:
+      <<: *common-env
+      ENV_SERVICE_URL: "http://env-service:8001"
+      MEMORY_SERVICE_URL: "http://memory-service:8004"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+    ports:
+      - "${ORCHESTRATOR_PORT:-8002}:8002"
+    depends_on:
+      - env-service
+      - memory-service
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # gateway-service — public door
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: ..
+      dockerfile: backend/services/gateway-service/Dockerfile
+    image: aria/gateway-service:0.1.0
+    container_name: aria-gateway
+    environment:
+      <<: *common-env
+      ORCHESTRATOR_URL: "http://orchestrator-service:8002"
+      VOICE_URL: "http://voice-service:8003"
+      ENV_URL: "http://env-service:8001"
+      CORS_ORIGINS: "http://localhost:3000"
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      - orchestrator-service
+      - voice-service
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # frontend — Next.js
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: aria/frontend:0.1.0
+    container_name: aria-frontend
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: "http://localhost:${GATEWAY_PORT:-8000}"
+      NEXT_PUBLIC_GATEWAY_WS_URL: "ws://localhost:${GATEWAY_PORT:-8000}/ws"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - gateway-service
+    restart: unless-stopped
+
+volumes:
+  qdrant-data:
+  memory-data:
+  voice-models:
