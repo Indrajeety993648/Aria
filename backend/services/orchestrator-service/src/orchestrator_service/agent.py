@@ -10,7 +10,6 @@ Pipeline:
 from __future__ import annotations
 
 import logging
-import os
 import time
 from typing import Any
 
@@ -22,7 +21,7 @@ from aria_contracts import (
     ToolCall,
 )
 
-from orchestrator_service.mapper import text_to_action
+from orchestrator_service.product_runtime import ProductRuntime
 from orchestrator_service.tools import calendar_stub, gmail_stub
 from orchestrator_service.tools.env_client import EnvClient
 
@@ -58,7 +57,7 @@ class AgentLoop:
 
     def __init__(self, env_client: EnvClient | None = None) -> None:
         self.env_client = env_client or EnvClient()
-        self.mock_llm: bool = os.environ.get("MOCK_LLM", "1") != "0"
+        self.runtime = ProductRuntime(env_client=self.env_client)
 
     # ------------------------------------------------------------------ #
     # Main entry                                                          #
@@ -66,21 +65,26 @@ class AgentLoop:
     async def turn(self, req: AgentTurnRequest) -> AgentTurnResponse:
         t_start = time.perf_counter()
 
-        # --- parse -------------------------------------------------------
+        # --- decision + validation + env step ---------------------------
         t0 = time.perf_counter()
-        action = self._parse_intent(req.user_text)
-        parse_ms = _ms_since(t0)
-
-        # --- env step (simulated mode always calls step) ----------------
-        env_ms = 0
         try:
-            t0 = time.perf_counter()
-            await self.env_client.step(req.session_id, action)
-            env_ms = _ms_since(t0)
+            action, _obs_after, validation, timing = await self.runtime.decide_and_step(
+                req.session_id, req.user_text
+            )
+            parse_ms = timing.get("decision", _ms_since(t0))
+            env_ms = timing.get("env_step", 0)
+            validation_ms = timing.get("validation", 0)
         except Exception as exc:
-            # Don't fail the turn — just surface the env issue in metadata.
-            log.warning("env step failed for %s: %s", req.session_id, exc)
-            env_ms = _ms_since(t0)
+            log.warning("product runtime failed for %s: %s", req.session_id, exc)
+            action = AriaAction(
+                action_id=int(ActionId.ASK_USER),
+                target_id=None,
+                payload={"user_text": req.user_text, "error": str(exc)},
+            )
+            parse_ms = _ms_since(t0)
+            env_ms = 0
+            validation_ms = 0
+
 
         # --- live-mode tool calls ---------------------------------------
         tool_calls: list[ToolCall] = []
@@ -103,6 +107,7 @@ class AgentLoop:
             mapped_env_action=action,
             latency_ms={
                 "parse": parse_ms,
+                "validation": validation_ms,
                 "env_step": env_ms,
                 "tools": tool_ms,
                 "total": _ms_since(t_start),
@@ -112,34 +117,6 @@ class AgentLoop:
     # ------------------------------------------------------------------ #
     # Intent parsing                                                      #
     # ------------------------------------------------------------------ #
-    def _parse_intent(self, user_text: str) -> AriaAction:
-        """Use the rule-based mapper; optionally fall through to Anthropic."""
-        action = text_to_action(user_text)
-
-        if self.mock_llm:
-            return action
-
-        # Optional: real LLM assist when MOCK_LLM=0 AND anthropic is installed
-        # AND an API key is configured. Import is lazy on purpose.
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            try:
-                llm_action = self._anthropic_refine(user_text, action)
-                if llm_action is not None:
-                    return llm_action
-            except Exception as exc:  # pragma: no cover — defensive
-                log.warning("anthropic refine failed, using rule-based: %s", exc)
-        return action
-
-    def _anthropic_refine(
-        self, user_text: str, fallback: AriaAction
-    ) -> AriaAction | None:  # pragma: no cover — optional, no key in CI
-        """Stub hook for a real LLM. Returns None to keep the rule-based result.
-
-        Kept as a named method so tests can monkeypatch it. We deliberately do
-        not call the Anthropic SDK here — the mock path is canonical.
-        """
-        return None
-
     # ------------------------------------------------------------------ #
     # Tool dispatch                                                       #
     # ------------------------------------------------------------------ #

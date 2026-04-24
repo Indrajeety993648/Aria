@@ -40,6 +40,7 @@ class EnvClient:
     def __init__(self, ws_url: str | None = None) -> None:
         self.ws_url: str = ws_url or _default_ws_url()
         self._sessions: dict[str, WebSocketClientProtocol] = {}
+        self._last_observation: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ #
@@ -93,25 +94,35 @@ class EnvClient:
             data["category"] = category
         if difficulty is not None:
             data["difficulty"] = difficulty
-        return await self._send_and_recv(ws, {"type": "reset", "data": data})
+        obs = await self._send_and_recv(ws, {"type": "reset", "data": data})
+        self._last_observation[session_id] = obs
+        return obs
 
     async def step(self, session_id: str, action: AriaAction) -> dict[str, Any]:
         """Send a `step` and return the observation dict."""
         try:
             ws = await self._ensure_live(session_id)
-            return await self._send_and_recv(
+            obs = await self._send_and_recv(
                 ws, {"type": "step", "data": action.model_dump()}
             )
+            self._last_observation[session_id] = obs
+            return obs
         except (websockets.ConnectionClosed, ConnectionError) as exc:
             # Graceful reconnect: drop the dead socket and let the next call
             # re-open. The env session itself is gone, so we propagate.
             log.warning("WS dropped for session %s: %s", session_id, exc)
             self._sessions.pop(session_id, None)
+            self._last_observation.pop(session_id, None)
             raise
+
+    def get_last_observation(self, session_id: str) -> dict[str, Any] | None:
+        """Return the last observation seen for this session, if any."""
+        return self._last_observation.get(session_id)
 
     async def close(self, session_id: str) -> None:
         """Close a single session's WS."""
         ws = self._sessions.pop(session_id, None)
+        self._last_observation.pop(session_id, None)
         if ws is None:
             return
         try:

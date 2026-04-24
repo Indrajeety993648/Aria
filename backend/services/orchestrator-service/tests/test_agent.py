@@ -22,6 +22,7 @@ class FakeEnvClient(EnvClient):
         # Skip parent init — we don't want any real sockets.
         self.ws_url = "ws://fake/ws"
         self._sessions = {}
+        self._last_observation = {}
         self.reset_calls: list[dict[str, Any]] = []
         self.step_calls: list[tuple[str, AriaAction]] = []
         self.close_calls: list[str] = []
@@ -47,13 +48,15 @@ class FakeEnvClient(EnvClient):
         self, session_id: str, action: AriaAction
     ) -> dict[str, Any]:
         self.step_calls.append((session_id, action))
-        return {
+        obs = {
             "time": 0.1,
             "location": "home",
             "step_count": len(self.step_calls),
             "max_steps": 50,
             "done": False,
         }
+        self._last_observation[session_id] = obs
+        return obs
 
     async def close(self, session_id: str) -> None:  # type: ignore[override]
         self.close_calls.append(session_id)
