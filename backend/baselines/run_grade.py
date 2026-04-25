@@ -12,15 +12,20 @@ from __future__ import annotations
 import argparse
 import random
 import sys
+from pathlib import Path
 from statistics import mean, stdev
 
-from aria_contracts import AriaAction
-from aria_scenarios import CATEGORIES
+# Make `baselines` and `env_service` importable whether the script is invoked
+# from the repo root (`python backend/baselines/run_grade.py`) or from
+# `backend/` directly. Must run before any of our package imports.
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
-from baselines.policies import POLICIES  # type: ignore[import-not-found]
+from aria_contracts import AriaAction  # noqa: E402
+from aria_scenarios import CATEGORIES  # noqa: E402
 
-sys.path.insert(0, "backend")  # make `baselines` importable when run from repo root
-
+from baselines.policies import POLICIES  # noqa: E402
 from env_service.aria_env import AriaEnv  # noqa: E402
 
 
