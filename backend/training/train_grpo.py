@@ -146,7 +146,17 @@ def main() -> int:
             and torch.cuda.get_device_capability()[0] >= 8,
         fp16=torch.cuda.is_available()
             and torch.cuda.get_device_capability()[0] < 8,
-        gradient_checkpointing=True,
+        # Gradient checkpointing OFF: Qwen 2.5 0.5B + LoRA fits a T4 (16 GB)
+        # comfortably without it (~3-4 GB peak). Enabling it triggers a known
+        # PEFT+checkpoint interaction where `requires_grad` doesn't propagate
+        # through the boundary, causing
+        #   RuntimeError: element 0 of tensors does not require grad …
+        # If you ever swap in a larger base model and DO need checkpointing,
+        # use the non-reentrant flavor:
+        #   gradient_checkpointing=True,
+        #   gradient_checkpointing_kwargs={"use_reentrant": False},
+        # AND call model.enable_input_require_grads() after PEFT wrap.
+        gradient_checkpointing=False,
         report_to=["wandb"] if os.getenv("WANDB_API_KEY") else ["none"],
         seed=args.seed,
     )
