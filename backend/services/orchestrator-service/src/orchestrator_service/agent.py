@@ -20,10 +20,12 @@ from aria_contracts import (
     AriaAction,
     ToolCall,
 )
+from aria_contracts.memory import MemoryWrite
 
 from orchestrator_service.product_runtime import ProductRuntime
 from orchestrator_service.tools import calendar_stub, gmail_stub
 from orchestrator_service.tools.env_client import EnvClient
+from orchestrator_service.tools.memory_client import MemoryClient
 
 log = logging.getLogger(__name__)
 
@@ -55,8 +57,13 @@ def _ms_since(t0: float) -> int:
 class AgentLoop:
     """Holds the env-client; drives one turn at a time."""
 
-    def __init__(self, env_client: EnvClient | None = None) -> None:
+    def __init__(
+        self,
+        env_client: EnvClient | None = None,
+        memory_client: MemoryClient | None = None,
+    ) -> None:
         self.env_client = env_client or EnvClient()
+        self.memory_client = memory_client or MemoryClient()
         self.runtime = ProductRuntime(env_client=self.env_client)
 
     # ------------------------------------------------------------------ #
@@ -98,6 +105,21 @@ class AgentLoop:
         reply = _REPLY_TEMPLATES.get(
             ActionId(action.action_id),
             "Okay.",
+        )
+
+        # --- best-effort episodic memory trace ---------------------------
+        # Never blocks the reply: memory_client.write swallows all errors.
+        await self.memory_client.write(
+            MemoryWrite(
+                namespace="episodic",
+                key=f"{req.session_id}:{int(time.time() * 1000)}",
+                content=req.user_text,
+                metadata={
+                    "session_id": req.session_id,
+                    "action_id": int(action.action_id),
+                    "mode": req.mode,
+                },
+            )
         )
 
         return AgentTurnResponse(

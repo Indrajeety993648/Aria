@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator_service.agent import AgentLoop
 from orchestrator_service.tools.env_client import EnvClient
+from orchestrator_service.tools.memory_client import MemoryClient
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +31,14 @@ class SessionCreateResponse(BaseModel):
     observation: dict[str, Any] = Field(default_factory=dict)
 
 
-def build_app(env_client: EnvClient | None = None) -> FastAPI:
+def build_app(
+    env_client: EnvClient | None = None,
+    memory_client: MemoryClient | None = None,
+) -> FastAPI:
     """Construct the FastAPI app.
 
-    Accepts an optional pre-built `EnvClient` so tests can inject a fake WS
-    client without patching globals.
+    Accepts an optional pre-built `EnvClient` and `MemoryClient` so tests can
+    inject fakes without patching globals.
     """
     app = FastAPI(
         title="aria-orchestrator",
@@ -43,10 +47,12 @@ def build_app(env_client: EnvClient | None = None) -> FastAPI:
     )
 
     client = env_client or EnvClient()
-    loop = AgentLoop(env_client=client)
+    mclient = memory_client or MemoryClient()
+    loop = AgentLoop(env_client=client, memory_client=mclient)
 
     # Expose on app.state so tests / hooks can swap them if needed.
     app.state.env_client = client
+    app.state.memory_client = mclient
     app.state.agent_loop = loop
 
     @app.get("/health")
