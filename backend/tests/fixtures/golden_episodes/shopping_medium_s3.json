@@ -1,0 +1,195 @@
+{
+  "meta": {
+    "category": "shopping",
+    "difficulty": "medium",
+    "max_steps": 10,
+    "policy": "scripted_expert",
+    "seed": 3
+  },
+  "reset_obs_sha256": "db5a93a781712308c212ad74e30f0415867690f0a46393aca91173c4fdba6b2e",
+  "steps": [
+    {
+      "action": {
+        "action_id": 7,
+        "payload": {
+          "amount": 900.0,
+          "user_approved": true
+        },
+        "target_id": "buy_gift"
+      },
+      "done": false,
+      "obs_sha256": "59008d4064d1e0c49cfd1a6a1ab9d09e426f5f1b37e8f980aed8d51b9eafc19c",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.4,
+        "time_efficiency": 0.0,
+        "total": 0.26,
+        "user_satisfaction": 0.8
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "ea88de4ba09f74a12cd0e3debec55ad00bef84a81a54b90c064e0008e4b47e79",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "de7c931ba315f37d46fd8b8983e94f649bd99bd5ecb09aa448bd04cc2dd4131a",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "7f41f87a8bd8a803401aa684c6d7c265cecb4348df693f2580b38095c81f835a",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "cdd2a1a6a5c7b04b41919161603819e072b832e369479cfb6ec85a42c9fd99c2",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "72ba7a6a38e55abea4c6ab0a19f07b6f203d2f3af9b0a6d926e3befc3c6e073a",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "cd89a1207e875dc817f7b83e4b14f843af9c35a6674b3d5d85492f7fdcf4af6f",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "05cf98ea5c2db21f3f1faf67ca50e9d42c96edd7a04e2ab4b027a0f8a68b9d45",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": false,
+      "obs_sha256": "e464881b8a13dad72eb06eceb5f0a8617a7b2ea2b4c92ddf3a129ce8280b065b",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.0,
+        "time_efficiency": 0.0,
+        "total": 0.0,
+        "user_satisfaction": 0.0
+      }
+    },
+    {
+      "action": {
+        "action_id": 13,
+        "payload": {},
+        "target_id": null
+      },
+      "done": true,
+      "obs_sha256": "4bf7a8eba83f56b6c6eabe74b12b0a1cf4043fe050deaacaf0e7957f6eef375f",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": -0.2,
+        "safety": 0.0,
+        "task_completion": 0.5,
+        "time_efficiency": 0.0,
+        "total": 0.185,
+        "user_satisfaction": 0.5
+      }
+    }
+  ]
+}

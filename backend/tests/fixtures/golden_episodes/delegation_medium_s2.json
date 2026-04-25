@@ -1,0 +1,92 @@
+{
+  "meta": {
+    "category": "delegation",
+    "difficulty": "medium",
+    "max_steps": 10,
+    "policy": "scripted_expert",
+    "seed": 2
+  },
+  "reset_obs_sha256": "fcf7bcc45063be9d5ed3f8f6ecbc0074083709b8f1ad3feb69f93c99d3bf4057",
+  "steps": [
+    {
+      "action": {
+        "action_id": 4,
+        "payload": {
+          "assignee_id": "c_report"
+        },
+        "target_id": "dt_000"
+      },
+      "done": false,
+      "obs_sha256": "48123e47e6b026cc3fd2daed092f295118c4b8d85b66cb4fcea7f3a881747b22",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.4,
+        "time_efficiency": 0.0,
+        "total": 0.26,
+        "user_satisfaction": 0.8
+      }
+    },
+    {
+      "action": {
+        "action_id": 4,
+        "payload": {
+          "assignee_id": "c_report"
+        },
+        "target_id": "dt_001"
+      },
+      "done": false,
+      "obs_sha256": "b65cf53c9a1887158903ac46ca98505ceb16f179c228e346b0bde0111336b327",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.4,
+        "time_efficiency": 0.0,
+        "total": 0.26,
+        "user_satisfaction": 0.8
+      }
+    },
+    {
+      "action": {
+        "action_id": 4,
+        "payload": {
+          "assignee_id": "c_report"
+        },
+        "target_id": "dt_002"
+      },
+      "done": false,
+      "obs_sha256": "4fb3beb5b30713d23739d207b56e6811e1bec60e04eb5753eb77e41bbc3105a2",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": 0.0,
+        "safety": 0.0,
+        "task_completion": 0.4,
+        "time_efficiency": 0.0,
+        "total": 0.26,
+        "user_satisfaction": 0.8
+      }
+    },
+    {
+      "action": {
+        "action_id": 4,
+        "payload": {
+          "assignee_id": "c_report"
+        },
+        "target_id": "dt_003"
+      },
+      "done": true,
+      "obs_sha256": "ee5649baefe7787b0758ffdf46211d14ca9bd1edd4972070a72bb4c2eacb3f13",
+      "reward_breakdown": {
+        "conflict_resolution": 0.0,
+        "relationship_health": -0.6000000000000001,
+        "safety": 0.0,
+        "task_completion": 1.2000000000000002,
+        "time_efficiency": 0.0,
+        "total": 0.54,
+        "user_satisfaction": 1.8
+      }
+    }
+  ]
+}

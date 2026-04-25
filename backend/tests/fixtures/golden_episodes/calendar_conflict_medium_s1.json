@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "category": "calendar_conflict",
+    "difficulty": "medium",
+    "max_steps": 10,
+    "policy": "scripted_expert",
+    "seed": 1
+  },
+  "reset_obs_sha256": "7a2fbaf6b94d26704ecbf2377be7ad70e65310f381b621e3d4ec1839e96f45be",
+  "steps": [
+    {
+      "action": {
+        "action_id": 8,
+        "payload": {},
+        "target_id": "conflict_personal"
+      },
+      "done": true,
+      "obs_sha256": "6afb625d28d3cf971db20c8292a89ad9f6e3f84d14d86d369b939aa30ae42207",
+      "reward_breakdown": {
+        "conflict_resolution": 1.0,
+        "relationship_health": 0.14999999999999997,
+        "safety": 0.0,
+        "task_completion": 0.8,
+        "time_efficiency": 0.0,
+        "total": 0.7400000000000001,
+        "user_satisfaction": 1.8
+      }
+    }
+  ]
+}
