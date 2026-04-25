@@ -17,6 +17,8 @@ from aria_contracts.env import (
     ScenarioCategory,
 )
 from aria_contracts.reward import (
+    REWARD_PER_STEP_MAX,
+    REWARD_PER_STEP_MIN,
     REWARD_WEIGHTS,
     RewardBreakdown,
 )
@@ -64,6 +66,8 @@ __all__ = [
     "MemoryWrite",
     "PendingTask",
     "RelationshipNode",
+    "REWARD_PER_STEP_MAX",
+    "REWARD_PER_STEP_MIN",
     "REWARD_WEIGHTS",
     "RewardBreakdown",
     "ScenarioCategory",

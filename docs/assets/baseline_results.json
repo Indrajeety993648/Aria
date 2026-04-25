@@ -1,0 +1,224 @@
+{
+  "do_nothing": {
+    "calendar_conflict": {
+      "ep_total_mean": -0.44725,
+      "ep_total_std": 0.13911822878022623,
+      "dim_means": {
+        "task_completion": -1.075,
+        "relationship_health": -0.51,
+        "user_satisfaction": 0.0,
+        "time_efficiency": 0.0,
+        "conflict_resolution": -0.51,
+        "safety": 0.0
+      }
+    },
+    "email_triage": {
+      "ep_total_mean": -4.3012500000000005,
+      "ep_total_std": 0.6893186471933147,
+      "dim_means": {
+        "task_completion": -0.265,
+        "relationship_health": -5.175000000000002,
+        "user_satisfaction": -6.400000000000003,
+        "time_efficiency": -12.800000000000006,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "message_reply": {
+      "ep_total_mean": -4.6035,
+      "ep_total_std": 0.09773891106842826,
+      "dim_means": {
+        "task_completion": -0.25,
+        "relationship_health": -6.705000000000003,
+        "user_satisfaction": -6.400000000000003,
+        "time_efficiency": -12.800000000000006,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "dinner_planning": {
+      "ep_total_mean": -0.27925,
+      "ep_total_std": 0.04782850394350303,
+      "dim_means": {
+        "task_completion": -0.7,
+        "relationship_health": -0.51,
+        "user_satisfaction": 0.0,
+        "time_efficiency": 0.0,
+        "conflict_resolution": -0.015,
+        "safety": 0.0
+      }
+    },
+    "delegation": {
+      "ep_total_mean": -0.607,
+      "ep_total_std": 0.1762952069683121,
+      "dim_means": {
+        "task_completion": -2.02,
+        "relationship_health": -0.51,
+        "user_satisfaction": 0.0,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "shopping": {
+      "ep_total_mean": -0.22700000000000004,
+      "ep_total_std": 0.08890266706081609,
+      "dim_means": {
+        "task_completion": -0.5,
+        "relationship_health": -0.51,
+        "user_satisfaction": 0.0,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    }
+  },
+  "random": {
+    "calendar_conflict": {
+      "ep_total_mean": 0.371175,
+      "ep_total_std": 0.41692610335393343,
+      "dim_means": {
+        "task_completion": 1.0725000000000002,
+        "relationship_health": -0.721,
+        "user_satisfaction": 0.825,
+        "time_efficiency": 1.02,
+        "conflict_resolution": 0.29500000000000004,
+        "safety": -2.3
+      }
+    },
+    "email_triage": {
+      "ep_total_mean": -0.30417500000000003,
+      "ep_total_std": 0.5330554744262453,
+      "dim_means": {
+        "task_completion": 1.4024999999999999,
+        "relationship_health": -0.8015,
+        "user_satisfaction": -1.6325,
+        "time_efficiency": 0.76,
+        "conflict_resolution": -0.32999999999999996,
+        "safety": -4.65
+      }
+    },
+    "message_reply": {
+      "ep_total_mean": -0.5971000000000001,
+      "ep_total_std": 0.34118962161053035,
+      "dim_means": {
+        "task_completion": 1.0750000000000002,
+        "relationship_health": -1.0205,
+        "user_satisfaction": -2.655,
+        "time_efficiency": 0.97,
+        "conflict_resolution": -0.425,
+        "safety": -4.25
+      }
+    },
+    "dinner_planning": {
+      "ep_total_mean": -0.5821000000000001,
+      "ep_total_std": 0.4586741648203921,
+      "dim_means": {
+        "task_completion": 1.0950000000000002,
+        "relationship_health": -1.0030000000000001,
+        "user_satisfaction": -2.6750000000000003,
+        "time_efficiency": 0.9450000000000001,
+        "conflict_resolution": -0.58,
+        "safety": -3.5
+      }
+    },
+    "delegation": {
+      "ep_total_mean": -0.5161,
+      "ep_total_std": 0.5654620048662584,
+      "dim_means": {
+        "task_completion": 0.07000000000000012,
+        "relationship_health": -0.8455,
+        "user_satisfaction": -1.2474999999999998,
+        "time_efficiency": 1.0150000000000001,
+        "conflict_resolution": -0.365,
+        "safety": -4.25
+      }
+    },
+    "shopping": {
+      "ep_total_mean": -0.13662500000000002,
+      "ep_total_std": 0.47500789120868964,
+      "dim_means": {
+        "task_completion": 2.0675,
+        "relationship_health": -0.8175,
+        "user_satisfaction": -1.85,
+        "time_efficiency": 0.8200000000000001,
+        "conflict_resolution": -0.31999999999999995,
+        "safety": -3.9
+      }
+    }
+  },
+  "expert": {
+    "calendar_conflict": {
+      "ep_total_mean": 0.5055000000000001,
+      "ep_total_std": 0.33336758595943466,
+      "dim_means": {
+        "task_completion": 0.44999999999999996,
+        "relationship_health": -0.19500000000000006,
+        "user_satisfaction": 1.62,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.72,
+        "safety": 0.0
+      }
+    },
+    "email_triage": {
+      "ep_total_mean": 0.9760000000000001,
+      "ep_total_std": 0.10801559341619447,
+      "dim_means": {
+        "task_completion": 1.1600000000000001,
+        "relationship_health": -0.51,
+        "user_satisfaction": 3.9400000000000004,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "message_reply": {
+      "ep_total_mean": 0.87675,
+      "ep_total_std": 0.07145618827019298,
+      "dim_means": {
+        "task_completion": 2.874999999999999,
+        "relationship_health": -0.51,
+        "user_satisfaction": 1.3,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "dinner_planning": {
+      "ep_total_mean": 0.47075,
+      "ep_total_std": 0.047828503943503034,
+      "dim_means": {
+        "task_completion": 2.2999999999999994,
+        "relationship_health": -0.51,
+        "user_satisfaction": 0.0,
+        "time_efficiency": 0.0,
+        "conflict_resolution": -0.015,
+        "safety": 0.0
+      }
+    },
+    "delegation": {
+      "ep_total_mean": 1.2905,
+      "ep_total_std": 0.06747124143701992,
+      "dim_means": {
+        "task_completion": 2.2100000000000004,
+        "relationship_health": -0.51,
+        "user_satisfaction": 4.2,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    },
+    "shopping": {
+      "ep_total_mean": 0.3705,
+      "ep_total_std": 0.06367888189973189,
+      "dim_means": {
+        "task_completion": 0.85,
+        "relationship_health": -0.51,
+        "user_satisfaction": 1.3,
+        "time_efficiency": 0.0,
+        "conflict_resolution": 0.0,
+        "safety": 0.0
+      }
+    }
+  }
+}

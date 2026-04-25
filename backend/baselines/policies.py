@@ -102,17 +102,29 @@ def scripted_expert(obs: AriaObservation, rng: random.Random) -> AriaAction:
             )
 
     if cat == "message_reply":
-        # Find loaded messages → reply with correct tone per sender preference
+        # Find loaded messages → reply with correct tone + language.
+        # Mood-aware: a contact whose inbox shows negative sentiment is
+        # treated as upset; default direct/formal tones get softened.
+        # Code-mix-aware: if the sender's language_preference is non-English,
+        # we explicitly set payload["lang"] so the language gate passes.
         for it in obs.inbox:
             if it.sentiment < -0.3:
                 sender = next(
-                    (r for r in obs.relationships if r.contact_id == it.sender_id), None
+                    (r for r in obs.relationships if r.contact_id == it.sender_id), None,
                 )
-                tone = sender.tone_preference if sender else "warm"
+                base_tone = sender.tone_preference if sender else "warm"
+                # Soften direct/formal toward apparently-upset contacts (mood inference).
+                if base_tone in ("direct", "formal") and it.sentiment < -0.3:
+                    tone = "warm"
+                else:
+                    tone = base_tone
+                payload: dict = {"tone": tone}
+                if sender and sender.language_preference and sender.language_preference != "en":
+                    payload["lang"] = sender.language_preference
                 return AriaAction(
                     action_id=ActionId.DRAFT_REPLY.value,
                     target_id=it.email_id,
-                    payload={"tone": tone},
+                    payload=payload,
                 )
 
     if cat == "dinner_planning":

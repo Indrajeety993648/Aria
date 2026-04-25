@@ -5,140 +5,208 @@ import type {
   AriaObservation,
   GwAgentEvent,
   RewardBreakdown,
-} from "@/lib/contracts";
+} from "./contracts";
 import {
-  MOCK_SESSION_ID,
-  mockEvents,
-  mockObservation,
-  mockRewardBreakdown,
-} from "@/lib/mockData";
+  MOCK_EVENTS,
+  MOCK_OBSERVATION,
+  MOCK_REWARD_BREAKDOWN,
+  MOCK_RUNNING_TOTAL,
+  MOCK_STREAM,
+} from "./mockData";
 
-export interface UseSessionResult {
-  connected: boolean;
-  observation: AriaObservation | null;
-  rewardBreakdown: RewardBreakdown | null;
+export type ConnectionState = "connecting" | "live" | "mock" | "error";
+
+/**
+ * High-level voice UX state. Drives the orb color and intensity.
+ *   idle      — waiting for mic permission / muted / nothing happening
+ *   listening — mic is hot, ambient audio, no wake word detected
+ *   wake      — "aria …" detected, actively transcribing
+ *   speaking  — ARIA is responding via TTS
+ */
+export type VoiceState = "idle" | "listening" | "wake" | "speaking" | "muted";
+
+export interface SessionAPI {
+  connected: ConnectionState;
+  sessionId: string;
+  observation: AriaObservation;
+  rewardBreakdown: RewardBreakdown;
+  runningReward: RewardBreakdown;
   events: GwAgentEvent[];
   transcript: string;
-  startRecording: () => void;
-  stopRecording: () => void;
-  send: (payload: Record<string, unknown>) => void;
+  partialTranscript: string;
+  replyText: string;
+  tickCount: number;
+  latencyMs: number;
+  send: (text: string) => void;
+  toggleMute: () => void;
+  muted: boolean;
+  voiceState: VoiceState;
+  analyserNode: AnalyserNode | null;
 }
 
-const WS_URL: string =
-  process.env.NEXT_PUBLIC_GATEWAY_WS_URL ??
-  "ws://localhost:8000/ws/session/demo";
+const GW_URL =
+  typeof process !== "undefined"
+    ? process.env.NEXT_PUBLIC_GATEWAY_WS_URL ??
+      "ws://localhost:8000/ws/session/demo"
+    : "ws://localhost:8000/ws/session/demo";
 
-const CONNECT_TIMEOUT_MS = 2000;
-const MOCK_REPLAY_INTERVAL_MS = 500;
+const WAKE_RE = /\b(hey )?(ok )?aria\b/i;
+const SPEAKING_HOLD_MS = 2600;
+const WAKE_HOLD_MS = 4000;
 
-function coerceReward(p: Record<string, unknown>): RewardBreakdown | null {
-  const b = p["breakdown"] ?? p;
-  if (typeof b !== "object" || b === null) return null;
-  const r = b as Partial<RewardBreakdown>;
-  if (
-    typeof r.task_completion === "number" &&
-    typeof r.total === "number"
-  ) {
-    return r as RewardBreakdown;
-  }
-  return null;
-}
+export function useSession(): SessionAPI {
+  const [connected, setConnected] = useState<ConnectionState>("connecting");
+  // SSR-safe: empty on the server, generated on first client render so server
+  // and client trees agree. Consumers render a placeholder when empty.
+  const [sessionId, setSessionId] = useState<string>("");
+  useEffect(() => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `s-${Math.floor(Math.random() * 1e9).toString(16)}`;
+    setSessionId(id.slice(0, 12));
 
-function coerceTranscript(p: Record<string, unknown>): string | null {
-  const t = p["text"];
-  return typeof t === "string" ? t : null;
-}
-
-export function useSession(
-  sessionId: string = MOCK_SESSION_ID,
-): UseSessionResult {
-  const [connected, setConnected] = useState<boolean>(false);
-  const [observation, setObservation] = useState<AriaObservation | null>(null);
+    // Rebase the pre-populated mock event log to the current wall clock.
+    const now = Date.now();
+    setEvents(
+      MOCK_EVENTS.map((ev) => ({
+        ...ev,
+        ts_ms: now + ev.ts_ms, // ev.ts_ms is negative; result is in the past
+      })),
+    );
+  }, []);
+  const [observation] = useState<AriaObservation>(MOCK_OBSERVATION);
   const [rewardBreakdown, setRewardBreakdown] =
-    useState<RewardBreakdown | null>(null);
+    useState<RewardBreakdown>(MOCK_REWARD_BREAKDOWN);
+  const [runningReward, setRunningReward] =
+    useState<RewardBreakdown>(MOCK_RUNNING_TOTAL);
+  // Start empty so SSR + client agree. `MOCK_EVENTS` carries negative
+  // offsets that we rebase to `Date.now()` on mount (effect below).
   const [events, setEvents] = useState<GwAgentEvent[]>([]);
-  const [transcript, setTranscript] = useState<string>("");
+  const [transcript, setTranscript] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
+  const [replyText, setReplyText] = useState(
+    "Board review pushed to 6:15 pm. Priya notified. Riya's play protected.",
+  );
+  const [tickCount, setTickCount] = useState(0);
+  const [latencyMs, setLatencyMs] = useState(0);
+
+  // --- always-listening voice state -----------------------------------------
+  const [muted, setMuted] = useState(false);
+  const [micGranted, setMicGranted] = useState(false);
+  const [voiceState, setVoiceStateRaw] = useState<VoiceState>("idle");
+  const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setVoiceState = useCallback((next: VoiceState, holdMs = 0) => {
+    if (voiceTimerRef.current) {
+      clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    setVoiceStateRaw(next);
+    if (holdMs > 0 && (next === "wake" || next === "speaking")) {
+      voiceTimerRef.current = setTimeout(() => {
+        // Decay back to listening/idle after the hold window.
+        setVoiceStateRaw(micGranted && !muted ? "listening" : "idle");
+      }, holdMs);
+    }
+  }, [micGranted, muted]);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // --- event ingestion ------------------------------------------------------
+  const ingest = useCallback(
+    (ev: GwAgentEvent) => {
+      setEvents((prev) => [...prev.slice(-199), ev]);
+      switch (ev.kind) {
+        case "partial_transcript": {
+          const text = String(ev.payload.text ?? "");
+          setPartialTranscript(text);
+          if (WAKE_RE.test(text)) setVoiceState("wake", WAKE_HOLD_MS);
+          break;
+        }
+        case "final_transcript": {
+          const text = String(ev.payload.text ?? "");
+          setTranscript(text);
+          setPartialTranscript("");
+          if (WAKE_RE.test(text)) setVoiceState("wake", WAKE_HOLD_MS);
+          break;
+        }
+        case "reward": {
+          const br = ev.payload.breakdown as RewardBreakdown | undefined;
+          if (br) {
+            setRewardBreakdown(br);
+            setRunningReward((prev) => ({
+              task_completion:     prev.task_completion     + br.task_completion,
+              relationship_health: prev.relationship_health + br.relationship_health,
+              user_satisfaction:   prev.user_satisfaction   + br.user_satisfaction,
+              time_efficiency:     prev.time_efficiency     + br.time_efficiency,
+              conflict_resolution: prev.conflict_resolution + br.conflict_resolution,
+              safety:              prev.safety              + br.safety,
+              total:               prev.total               + br.total,
+            }));
+          }
+          break;
+        }
+        case "env_step":
+          setTickCount((t) => t + 1);
+          break;
+        case "reply_text":
+          setReplyText(String(ev.payload.text ?? ""));
+          setVoiceState("speaking", SPEAKING_HOLD_MS);
+          break;
+      }
+    },
+    [setVoiceState],
   );
 
-  const ingestEvent = useCallback((ev: GwAgentEvent) => {
-    setEvents((prev) => [...prev, ev].slice(-200));
-    switch (ev.kind) {
-      case "partial_transcript":
-      case "final_transcript": {
-        const t = coerceTranscript(ev.payload);
-        if (t !== null) setTranscript(t);
-        break;
-      }
-      case "reply_text": {
-        const t = coerceTranscript(ev.payload);
-        if (t !== null) setTranscript(t);
-        break;
-      }
-      case "reward": {
-        const rb = coerceReward(ev.payload);
-        if (rb !== null) setRewardBreakdown(rb);
-        break;
-      }
-      case "env_step": {
-        const obs = ev.payload["observation"];
-        if (obs && typeof obs === "object") {
-          setObservation(obs as AriaObservation);
-        }
-        break;
-      }
-      default:
-        break;
-    }
-  }, []);
-
-  const startMockReplay = useCallback(() => {
-    if (mockTimerRef.current !== null) return;
-    setObservation(mockObservation);
-    setRewardBreakdown(mockRewardBreakdown);
-    let i = 0;
-    mockTimerRef.current = setInterval(() => {
-      if (i >= mockEvents.length) {
-        if (mockTimerRef.current !== null) {
-          clearInterval(mockTimerRef.current);
-          mockTimerRef.current = null;
-        }
-        return;
-      }
-      ingestEvent(mockEvents[i]!);
-      i += 1;
-    }, MOCK_REPLAY_INTERVAL_MS);
-  }, [ingestEvent]);
-
+  // --- ws lifecycle ---------------------------------------------------------
   useEffect(() => {
+    // Wait until sessionId has been generated on the client.
+    if (!sessionId) return;
     let cancelled = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const enterMock = () => {
+      if (cancelled) return;
+      setConnected("mock");
+      const replay = () => {
+        let i = 0;
+        const step = () => {
+          if (cancelled) return;
+          if (i >= MOCK_STREAM.length) {
+            setTimeout(replay, 8000);
+            return;
+          }
+          const ev = { ...MOCK_STREAM[i], ts_ms: Date.now() };
+          ingest(ev);
+          const delay =
+            i + 1 < MOCK_STREAM.length
+              ? MOCK_STREAM[i + 1].ts_ms - MOCK_STREAM[i].ts_ms
+              : 1000;
+          i += 1;
+          setTimeout(step, Math.max(100, delay));
+        };
+        step();
+      };
+      replay();
+    };
 
     try {
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(GW_URL);
       wsRef.current = ws;
-
-      fallbackTimeoutRef.current = setTimeout(() => {
-        if (!cancelled && ws.readyState !== WebSocket.OPEN) {
-          try {
-            ws.close();
-          } catch {
-            /* ignore */
-          }
-          startMockReplay();
+      fallbackTimer = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          try { ws.close(); } catch {}
+          enterMock();
         }
-      }, CONNECT_TIMEOUT_MS);
-
+      }, 1500);
       ws.onopen = () => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
         if (cancelled) return;
-        if (fallbackTimeoutRef.current !== null) {
-          clearTimeout(fallbackTimeoutRef.current);
-          fallbackTimeoutRef.current = null;
-        }
-        setConnected(true);
+        setConnected("live");
         ws.send(
           JSON.stringify({
             kind: "session_start",
@@ -147,75 +215,160 @@ export function useSession(
           }),
         );
       };
-
-      ws.onmessage = (msg: MessageEvent<string>) => {
+      ws.onmessage = (msg) => {
         try {
-          const parsed = JSON.parse(msg.data) as GwAgentEvent;
-          ingestEvent(parsed);
+          const ev = JSON.parse(msg.data) as GwAgentEvent;
+          ingest(ev);
         } catch {
-          /* ignore malformed frames */
+          /* ignore */
         }
       };
-
-      ws.onerror = () => {
-        if (cancelled) return;
-        setConnected(false);
-        startMockReplay();
-      };
-
       ws.onclose = () => {
         if (cancelled) return;
-        setConnected(false);
-        startMockReplay();
+        enterMock();
       };
+      ws.onerror = () => { /* fallback timer handles fallback */ };
     } catch {
-      startMockReplay();
+      enterMock();
     }
 
     return () => {
       cancelled = true;
-      if (fallbackTimeoutRef.current !== null) {
-        clearTimeout(fallbackTimeoutRef.current);
-        fallbackTimeoutRef.current = null;
-      }
-      if (mockTimerRef.current !== null) {
-        clearInterval(mockTimerRef.current);
-        mockTimerRef.current = null;
-      }
-      if (wsRef.current !== null) {
-        try {
-          wsRef.current.close();
-        } catch {
-          /* ignore */
-        }
-        wsRef.current = null;
-      }
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      try { wsRef.current?.close(); } catch {}
     };
-  }, [sessionId, startMockReplay, ingestEvent]);
+  }, [sessionId, ingest]);
 
-  const send = useCallback((payload: Record<string, unknown>) => {
-    const ws = wsRef.current;
-    if (ws !== null && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
-    }
+  // --- latency tick (ambient) -----------------------------------------------
+  useEffect(() => {
+    const id = setInterval(() => {
+      setLatencyMs(
+        420 + Math.floor(Math.sin(Date.now() / 1800) * 40 + Math.random() * 10),
+      );
+    }, 1000);
+    return () => clearInterval(id);
   }, []);
 
-  const startRecording = useCallback(() => {
-    send({ kind: "voice_start", session_id: sessionId });
-  }, [send, sessionId]);
+  // --- always-listening mic ------------------------------------------------
+  const startMic = useCallback(async () => {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    )
+      return;
+    if (mediaStreamRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const AC =
+        window.AudioContext ||
+        // @ts-expect-error webkitAudioContext fallback
+        window.webkitAudioContext;
+      const ctx = new AC();
+      audioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.85;
+      src.connect(analyser);
+      analyserRef.current = analyser;
+      setMicGranted(true);
+      setVoiceState("listening");
+    } catch {
+      setMicGranted(false);
+      setVoiceState("idle");
+    }
+  }, [setVoiceState]);
 
-  const stopRecording = useCallback(() => {
-    send({ kind: "voice_stop", session_id: sessionId });
-  }, [send, sessionId]);
+  const stopMic = useCallback(() => {
+    try {
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      audioCtxRef.current?.close();
+    } catch {}
+    mediaStreamRef.current = null;
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+    setMicGranted(false);
+  }, []);
+
+  // auto-start mic on mount
+  useEffect(() => {
+    void startMic();
+    return () => stopMic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // keep voice state in sync with mute toggles
+  useEffect(() => {
+    if (muted) {
+      setVoiceState("muted");
+    } else if (micGranted) {
+      // Only fall back to listening if we aren't already in wake/speaking.
+      setVoiceStateRaw((s) =>
+        s === "wake" || s === "speaking" ? s : "listening",
+      );
+    } else {
+      setVoiceStateRaw("idle");
+    }
+  }, [muted, micGranted, setVoiceState]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      const track = mediaStreamRef.current?.getAudioTracks()[0];
+      if (track) track.enabled = !next;
+      return next;
+    });
+  }, []);
+
+  // --- send text turn -------------------------------------------------------
+  const send = useCallback(
+    (text: string) => {
+      if (!text.trim()) return;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            kind: "user_text",
+            session_id: sessionId,
+            user_text: text,
+          }),
+        );
+      } else {
+        ingest({
+          session_id: sessionId,
+          kind: "final_transcript",
+          payload: { text },
+          ts_ms: Date.now(),
+        });
+        setTimeout(() => {
+          ingest({
+            session_id: sessionId,
+            kind: "reply_text",
+            payload: { text: `Understood: "${text.slice(0, 64)}"` },
+            ts_ms: Date.now(),
+          });
+        }, 400);
+      }
+    },
+    [sessionId, ingest],
+  );
 
   return {
     connected,
+    sessionId,
     observation,
     rewardBreakdown,
+    runningReward,
     events,
     transcript,
-    startRecording,
-    stopRecording,
+    partialTranscript,
+    replyText,
+    tickCount,
+    latencyMs,
     send,
+    toggleMute,
+    muted,
+    voiceState,
+    analyserNode: analyserRef.current,
   };
 }

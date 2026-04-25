@@ -35,9 +35,28 @@ HTTP surface:
 ### Real mode (`MOCK_VOICE=0` and `ARIA_DOWNLOAD_MODELS=1`)
 
 - STT: [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) with `tiny.en`.
-- TTS: [`piper-tts`](https://github.com/rhasspy/piper) streaming synthesis.
+- TTS: [`piper-tts`](https://github.com/rhasspy/piper) streaming synthesis by default.
 - Backends are lazy-loaded on first request; the service starts healthy even if
   the weights are absent — it only errors on first real-use.
+
+### ElevenLabs TTS (optional)
+
+For higher-quality conversational voice, swap the TTS backend:
+
+```bash
+MOCK_VOICE=0 \
+TTS_BACKEND=elevenlabs \
+ELEVENLABS_API_KEY=sk_... \
+ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM \
+ELEVENLABS_MODEL=eleven_turbo_v2_5 \
+  python -m voice_service.server
+```
+
+- Pure-`httpx` streaming (no `elevenlabs` SDK required).
+- Requests `pcm_16000` directly, re-chunked into 20 ms `VoiceChunk`s so
+  first-byte latency is typically 150–250 ms over a good link.
+- `optimize_streaming_latency=3` is the sweet spot for conversational agents.
+- STT still uses faster-whisper; this flag only swaps the voice-out side.
 
 Blueprint alignment notes:
 
@@ -96,6 +115,10 @@ All tests run in mock mode and require no network / weights.
 | `MOCK_VOICE`            | `1`     | `1` = canned STT/TTS. `0` = real backends (lazy-loaded).       |
 | `ARIA_DOWNLOAD_MODELS`  | `0`     | In real mode, set to `1` to permit model download at first use.|
 | `WHISPER_MODEL`         | `tiny.en` | faster-whisper model name.                                   |
+| `TTS_BACKEND`           | `piper` | `piper` \| `elevenlabs` \| `mock`. Ignored when `MOCK_VOICE=1`.  |
 | `PIPER_VOICE`           | `en_US-amy-medium` | Default Piper voice ID.                             |
 | `PIPER_VOICE_PATH`      | (unset) | Optional path to a local `.onnx` Piper voice file.             |
+| `ELEVENLABS_API_KEY`    | (unset) | Required when `TTS_BACKEND=elevenlabs`.                        |
+| `ELEVENLABS_VOICE_ID`   | `21m00Tcm4TlvDq8ikWAM` | ElevenLabs voice ID (Rachel by default).        |
+| `ELEVENLABS_MODEL`      | `eleven_turbo_v2_5` | Low-latency streaming model.                       |
 | `VAD_THRESHOLD`         | `0.01`  | Energy threshold for the built-in VAD (RMS over int16 frame).  |

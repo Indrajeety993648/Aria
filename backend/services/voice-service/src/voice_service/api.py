@@ -45,13 +45,31 @@ def get_stt() -> Any:
     return _stt
 
 
+def _tts_backend_name() -> str:
+    """Resolve the configured TTS backend.
+
+    Priority:
+      1. MOCK_VOICE=1 (default) → 'mock'
+      2. TTS_BACKEND env var    → 'elevenlabs' | 'piper' | 'mock'
+      3. fallback to 'piper'
+    """
+    if _is_mock():
+        return "mock"
+    return os.getenv("TTS_BACKEND", "piper").strip().lower()
+
+
 def get_tts() -> Any:
     global _tts
     if _tts is not None:
         return _tts
-    if _is_mock():
+    name = _tts_backend_name()
+    if name == "elevenlabs":
+        from .elevenlabs_tts import ElevenLabsTTS
+
+        _tts = ElevenLabsTTS()
+    elif name == "mock":
         _tts = MockTTS()
-    else:
+    else:  # piper / default
         from .tts import TTS
 
         _tts = TTS()
@@ -77,6 +95,7 @@ def build_app() -> FastAPI:
             "status": "ok",
             "service": "voice-service",
             "mock": _is_mock(),
+            "tts_backend": _tts_backend_name(),
         }
 
     @app.post("/stt", response_model=VoiceTranscript)

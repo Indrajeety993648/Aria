@@ -22,6 +22,17 @@ assert abs(sum(REWARD_WEIGHTS.values()) - 1.0) < 1e-9, (
     f"Reward weights must sum to 1.0; got {sum(REWARD_WEIGHTS.values())}"
 )
 
+# Per-step reward bound, derived from the weights and per-dim clamp ranges.
+# Five dims are clamped to [-1, 1], safety is clamped to [-2, 1].
+#   max = 1*0.25 + 1*0.20 + 1*0.20 + 1*0.15 + 1*0.15 + 1*0.05 = +1.00
+#   min = -1*0.25 - 1*0.20 - 1*0.20 - 1*0.15 - 1*0.15 - 2*0.05 = -1.05
+# A terminal step additionally accumulates the terminal-reward breakdown
+# (also bounded by the same per-dim rules), so the absolute per-step
+# return is at most 2 * 1.05 = 2.10, comfortably inside the [-3, 3] band
+# documented in the hackathon spec.
+REWARD_PER_STEP_MAX: float = 2.10
+REWARD_PER_STEP_MIN: float = -2.10
+
 
 class RewardBreakdown(BaseModel):
     """Per-dimension reward, plus the weighted total.

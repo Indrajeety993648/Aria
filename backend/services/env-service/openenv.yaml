@@ -1,0 +1,142 @@
+# OpenEnv manifest for ARIA — `aria-personal-manager-v1`
+#
+# This file declares the environment to OpenEnv tooling and HuggingFace
+# Spaces. Schema reference: https://github.com/meta-pytorch/OpenEnv
+
+apiVersion: openenv.dev/v1
+kind: Environment
+metadata:
+  name: aria-personal-manager-v1
+  version: 0.1.0
+  description: >
+    Relationship-aware personal-task RL environment. Penalizes task
+    completion strategies that damage human relationships. Six-dim
+    composable rubric reward, hidden contact mood (Theory of Mind),
+    cascading consequences, Hindi-English code-mix scenarios.
+  author: ARIA team
+  license: Apache-2.0
+  documentation_url: https://github.com/Indrajeety993648/Aria
+  tags:
+    - reinforcement-learning
+    - openenv
+    - llm-agents
+    - personal-assistant
+    - theory-of-mind
+    - multilingual
+
+spec:
+  # The container running this env exposes an HTTP + WS server compatible
+  # with openenv.core.env_server.http_server.create_app().
+  runtime:
+    image: aria/env-service:0.1.0
+    port: 7860               # HF Space convention; container also accepts $PORT
+    healthcheck:
+      path: /health
+      interval_s: 10
+      timeout_s: 3
+    concurrency:
+      supports_concurrent_sessions: true
+      max_concurrent_envs: 8
+
+  # Action space — 15 discrete actions, see aria_contracts.ActionId.
+  action_schema:
+    type: object
+    required: [action_id]
+    properties:
+      action_id:
+        type: integer
+        minimum: 0
+        maximum: 14
+        description: Discrete action index — see ActionId enum.
+      target_id:
+        type: [string, "null"]
+        description: Entity affected (event_id, contact_id, email_id, task_id).
+      payload:
+        type: object
+        description: >
+          Per-action parameters. e.g. SEND_MSG → {"tone", "lang", "user_approved"};
+          PURCHASE → {"amount", "user_approved"}; DRAFT_REPLY → {"tone", "lang"}.
+      metadata:
+        type: object
+
+  # Observation summary — full schema available via GET /schema
+  observation_schema:
+    type: object
+    properties:
+      done: {type: boolean}
+      reward: {type: [number, "null"]}
+      time: {type: number, minimum: 0, maximum: 24}
+      location: {type: string, enum: [home, office, commute, other]}
+      calendar: {type: array, description: "30-day calendar event list"}
+      inbox: {type: array, description: "Priority-ordered inbox"}
+      relationships: {type: array, description: "Per-contact graph nodes"}
+      pending_tasks: {type: array}
+      preferences: {type: array, description: "64-dim learned preference vector"}
+      scenario_category: {type: [string, "null"]}
+      difficulty: {type: [string, "null"], enum: [easy, medium, hard, null]}
+      step_count: {type: integer}
+      max_steps: {type: integer}
+      reward_breakdown:
+        type: object
+        description: 6-dim reward decomposition for the last step
+
+  # Reward — six composable rubrics, each individually inspectable
+  reward:
+    type: composite
+    rubrics:
+      - {name: task_completion,     weight: 0.25}
+      - {name: relationship_health, weight: 0.20}
+      - {name: user_satisfaction,   weight: 0.20}
+      - {name: time_efficiency,     weight: 0.15}
+      - {name: conflict_resolution, weight: 0.15}
+      - {name: safety,              weight: 0.05}
+
+  # Episode definition
+  episode:
+    max_steps: 50
+    description: One simulated personal day (≈8 AM → 11 PM).
+
+  # Scenarios
+  scenarios:
+    categories:
+      - calendar_conflict   # forced day-0 overlap; resolve without damage
+      - email_triage        # urgent vs noise prioritization
+      - message_reply       # emotional + tone + (Hindi/Hinglish) code-mix
+      - dinner_planning     # multi-constraint coordination
+      - delegation          # identify + assign delegatable tasks
+      - shopping            # budget + preference match + safety gate
+    difficulties: [easy, medium, hard]
+    determinism: true
+    description: 6 categories × 3 difficulties = 18 scenario cells, all seeded.
+
+  # Novel mechanics — what makes this env citable
+  novel_mechanics:
+    - hidden_contact_mood: >
+        Each contact has a hidden current_mood ∈ [-1, 1] not exposed in the
+        observation. Agent must infer from inbox sentiment trail and adapt
+        tone (Theory-of-Mind axis).
+    - cascading_consequences: >
+        Cancel high-closeness without alternative → future events become
+        less flexible AND future messages from that contact arrive with
+        muted urgency. Hard to reward-hack.
+    - hindi_english_code_mix: >
+        ~25-45% of partner/family/friend contacts on medium/hard prefer
+        hinglish replies. Mismatching language costs reward.
+    - composable_rubric_tree: >
+        Each reward dim is an OpenEnv Rubric subclass. `env.rubric.named_rubrics()`
+        exposes them; `ablate_dimensions=("relationship_health",)` zeros a
+        dim for ablation studies.
+
+  # Baselines (committed in-repo)
+  baselines:
+    - {name: random, mean_reward: -0.289, n_episodes: 20}
+    - {name: scripted_expert, mean_reward: 0.793, n_episodes: 20}
+    - {name: do_nothing, mean_reward: -1.759, n_episodes: 20}
+    note: scripted_expert beats random by +374% relative on medium difficulty.
+
+# Pointers to off-repo materials (HF blog post, video, etc.) once live.
+links:
+  github: https://github.com/Indrajeety993648/Aria
+  hf_blog: https://huggingface.co/blog/<TBD>/aria-relationship-aware-agent
+  video: https://youtu.be/<TBD>
+  paper_blog: docs/blog/HF_BLOG_DRAFT.md

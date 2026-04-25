@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from aria_contracts import Difficulty, InboxItem
 
+from aria_scenarios.data import HINGLISH_EMAIL_SUBJECTS
 from aria_scenarios.generators._common import (
     build_calendar,
     build_inbox,
@@ -14,7 +15,7 @@ from aria_scenarios.generators._common import (
     build_tasks,
     fresh_prefs,
 )
-from aria_scenarios.rng import make_rng, uniform
+from aria_scenarios.rng import choice, make_rng, uniform
 from aria_scenarios.spec import Objective, ScenarioSpec
 
 
@@ -22,9 +23,13 @@ def generate(difficulty: Difficulty, seed: int) -> ScenarioSpec:
     rng = make_rng(seed)
     rels = build_relationships(rng, difficulty)
     contact_ids = [r.contact_id for r in rels]
+    hinglish_senders = {r.contact_id for r in rels if r.language_preference == "hinglish"}
 
     calendar = build_calendar(rng, difficulty, contact_ids, n_override=4)
-    base_inbox = build_inbox(rng, difficulty, senders=contact_ids, n_override=4)
+    base_inbox = build_inbox(
+        rng, difficulty, senders=contact_ids, n_override=4,
+        hinglish_senders=hinglish_senders,
+    )
 
     # The "loaded" message(s)
     close_contacts = [r for r in rels if r.closeness >= 0.8]
@@ -38,11 +43,17 @@ def generate(difficulty: Difficulty, seed: int) -> ScenarioSpec:
         contact = close_contacts[i % len(close_contacts)]
         # negative sentiment = upset
         sentiment = uniform(rng, -0.95, -0.4)
+        # Subject must respect language preference so the agent's inference
+        # task is consistent with the language gate.
+        if contact.language_preference == "hinglish":
+            subject = choice(rng, HINGLISH_EMAIL_SUBJECTS)
+        else:
+            subject = "Are you free to talk?"
         loaded_items.append(
             InboxItem(
                 email_id=f"loaded_{i:03d}",
                 sender_id=contact.contact_id,
-                subject="Are you free to talk?",
+                subject=subject,
                 urgency=0.9,
                 age_hours=uniform(rng, 0.5, 3.0),
                 requires_reply=True,

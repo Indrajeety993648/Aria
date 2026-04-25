@@ -1,0 +1,43 @@
+# HuggingFace-Space-flavored Dockerfile.
+#
+# Differences from the vanilla Dockerfile:
+#   - Listens on $PORT (default 7860 per HF convention)
+#   - All shared packages baked in (HF builds the image once; no compose)
+#   - Includes a tiny Gradio test page so visitors can poke the env in-browser
+FROM python:3.11-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PORT=7860
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Shared packages first (better Docker layer caching)
+COPY backend/packages/aria-contracts /app/packages/aria-contracts
+COPY backend/packages/aria-scenarios /app/packages/aria-scenarios
+COPY backend/packages/aria-rewards   /app/packages/aria-rewards
+
+# env-service itself
+COPY backend/services/env-service /app/services/env-service
+
+# Install in dependency order
+RUN pip install /app/packages/aria-contracts \
+ && pip install /app/packages/aria-scenarios \
+ && pip install /app/packages/aria-rewards \
+ && pip install /app/services/env-service
+
+# Build-time sanity import
+RUN python -c "from env_service.server import app; print('env-service import OK')"
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=10s \
+    CMD curl -fsS "http://localhost:${PORT}/health" || exit 1
+
+# HF Spaces sends $PORT — fall through to 7860 if unset.
+CMD ["sh", "-c", "python -m uvicorn env_service.server:app --host 0.0.0.0 --port ${PORT:-7860}"]

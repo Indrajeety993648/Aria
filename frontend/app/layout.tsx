@@ -1,23 +1,49 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], display: "swap" });
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const geistSans = Geist({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-sans",
+});
 
 export const metadata: Metadata = {
-  title: "ARIA — Agentic Resource & Intent Assistant",
+  title: "ARIA // Agentic Real-time Intelligent Assistant",
   description:
-    "Live dashboard for the ARIA agent — voice, environment, reward, and event trace.",
+    "Voice-first personal AI manager — Meta PyTorch OpenEnv Hackathon 2026.",
+  metadataBase: new URL("https://aria.local"),
+  icons: [{ rel: "icon", url: "/favicon.svg" }],
 };
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}): React.JSX.Element {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 text-slate-200`}>
+    <html
+      lang="en"
+      className={`${jetbrainsMono.variable} ${geistSans.variable}`}
+      suppressHydrationWarning
+    >
+      {/*
+        suppressHydrationWarning is on <html> and <body> deliberately:
+        browser extensions (ColorZilla, Grammarly, LastPass, dark-mode
+        extensions, etc.) inject attributes after the HTML is shipped but
+        before React hydrates. This is the one documented Next.js escape
+        hatch for those attributes; see
+        https://nextjs.org/docs/messages/react-hydration-error
+      */}
+      <body
+        className="min-h-screen bg-bg text-fg"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

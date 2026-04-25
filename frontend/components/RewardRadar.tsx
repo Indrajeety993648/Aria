@@ -5,205 +5,188 @@ import {
   type RewardBreakdown,
   type RewardDimension,
 } from "@/lib/contracts";
+import { sign } from "@/lib/format";
+import { Panel } from "./Panel";
 
 interface RewardRadarProps {
-  current: RewardBreakdown | null;
-  runningTotal: RewardBreakdown | null;
+  step: RewardBreakdown;
+  running: RewardBreakdown;
 }
 
-const SIZE = 320;
-const CENTER = SIZE / 2;
-const RADIUS = 120;
-const AXES = REWARD_DIMENSIONS;
-const RING_LEVELS = [0.25, 0.5, 0.75, 1.0];
-const LABEL_RADIUS = RADIUS + 24;
-
-const AXIS_LABELS: Readonly<Record<RewardDimension, string>> = {
-  task_completion: "Task",
-  relationship_health: "Relationships",
-  user_satisfaction: "Satisfaction",
-  time_efficiency: "Efficiency",
-  conflict_resolution: "Conflict",
-  safety: "Safety",
+const LABEL: Record<RewardDimension, string> = {
+  task_completion: "TASK",
+  relationship_health: "REL",
+  user_satisfaction: "SAT",
+  time_efficiency: "TIME",
+  conflict_resolution: "CONF",
+  safety: "SAFE",
 };
 
-function axisAngle(i: number, n: number): number {
-  // Start at top (−90°), clockwise.
-  return -Math.PI / 2 + (i * 2 * Math.PI) / n;
+const W = 300;
+const H = 300;
+const CX = W / 2;
+const CY = H / 2 + 4;
+const RADIUS = 100;
+const AXES = REWARD_DIMENSIONS.length;
+
+function polar(i: number, r: number): [number, number] {
+  const a = (Math.PI * 2 * i) / AXES - Math.PI / 2;
+  return [CX + Math.cos(a) * r, CY + Math.sin(a) * r];
 }
 
-function point(i: number, n: number, r: number): [number, number] {
-  const a = axisAngle(i, n);
-  return [CENTER + Math.cos(a) * r, CENTER + Math.sin(a) * r];
+function polygonPoints(vals: number[], normMax: number): string {
+  return vals
+    .map((v, i) => {
+      const clamped = Math.max(-1, Math.min(1, v / normMax));
+      const [x, y] = polar(i, RADIUS * ((clamped + 1) / 2));
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 }
 
-function normalize(v: number, maxAbs: number): number {
-  if (maxAbs <= 0) return 0;
-  return Math.max(-1, Math.min(1, v / maxAbs));
-}
+export function RewardRadar({ step, running }: RewardRadarProps) {
+  const stepVals = REWARD_DIMENSIONS.map((d) => step[d]);
+  const runVals = REWARD_DIMENSIONS.map((d) => running[d]);
+  const runNormMax = Math.max(1, ...runVals.map((v) => Math.abs(v))) || 1;
 
-function polygonPath(
-  rb: RewardBreakdown,
-  maxAbs: number,
-): string {
-  const n = AXES.length;
-  return AXES.map((dim, i) => {
-    const v = normalize(rb[dim], maxAbs);
-    const r = Math.max(0, v) * RADIUS;
-    const [x, y] = point(i, n, r);
-    return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-  }).join(" ") + " Z";
-}
-
-export function RewardRadar({
-  current,
-  runningTotal,
-}: RewardRadarProps): React.JSX.Element {
-  const maxCurrent =
-    current === null
-      ? 1
-      : Math.max(1, ...AXES.map((d) => Math.abs(current[d])));
-  const maxTotal =
-    runningTotal === null
-      ? 1
-      : Math.max(1, ...AXES.map((d) => Math.abs(runningTotal[d])));
+  const ringVals = [0.25, 0.5, 0.75, 1.0];
 
   return (
-    <section className="flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-          Reward
-        </h2>
-        <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-sm bg-emerald-400" />
-            <span className="text-slate-400">step</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-sm bg-slate-400" />
-            <span className="text-slate-400">episode</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-center">
+    <Panel
+      label="REWARD // 6D"
+      meta={
+        <span className="flex items-center gap-3 tracking-widest">
+          <span>
+            <span className="text-(--color-fg-muted) mr-1">Σ</span>
+            <span className="data text-(--color-phosphor)">
+              {sign(running.total, 2)}
+            </span>
+          </span>
+          <span>
+            <span className="text-(--color-fg-muted) mr-1">Δ</span>
+            <span
+              className={`data ${
+                step.total >= 0
+                  ? "text-(--color-phosphor)"
+                  : "text-(--color-red)"
+              }`}
+            >
+              {sign(step.total, 3)}
+            </span>
+          </span>
+        </span>
+      }
+      stateDot={step.total >= 0 ? "live" : "warn"}
+      className="h-full"
+    >
+      <div className="flex h-full flex-col items-center justify-between gap-2 p-3">
         <svg
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          width="100%"
-          height={SIZE}
-          className="max-w-[360px]"
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full max-w-[320px]"
+          aria-label="reward radar"
         >
-          {/* Rings */}
-          {RING_LEVELS.map((lvl) => (
+          {/* concentric rings */}
+          {ringVals.map((v) => (
             <polygon
-              key={lvl}
-              points={AXES.map((_, i) => {
-                const [x, y] = point(i, AXES.length, lvl * RADIUS);
-                return `${x},${y}`;
-              }).join(" ")}
+              key={v}
+              points={Array.from({ length: AXES })
+                .map((_, i) => polar(i, RADIUS * v).join(","))
+                .join(" ")}
               fill="none"
-              stroke="#1e293b"
+              stroke="#1a1a1a"
               strokeWidth={1}
             />
           ))}
-
-          {/* Axes */}
-          {AXES.map((_, i) => {
-            const [x, y] = point(i, AXES.length, RADIUS);
+          {/* axis spokes */}
+          {REWARD_DIMENSIONS.map((_, i) => {
+            const [x, y] = polar(i, RADIUS);
             return (
               <line
                 key={i}
-                x1={CENTER}
-                y1={CENTER}
+                x1={CX}
+                y1={CY}
                 x2={x}
                 y2={y}
-                stroke="#1e293b"
+                stroke="#1a1a1a"
                 strokeWidth={1}
               />
             );
           })}
+          {/* zero-center ring (50%) slightly brighter */}
+          <polygon
+            points={Array.from({ length: AXES })
+              .map((_, i) => polar(i, RADIUS * 0.5).join(","))
+              .join(" ")}
+            fill="none"
+            stroke="#2a2a2a"
+            strokeWidth={1}
+          />
 
-          {/* Episode total (behind) */}
-          {runningTotal !== null ? (
-            <path
-              d={polygonPath(runningTotal, maxTotal)}
-              fill="rgba(148,163,184,0.18)"
-              stroke="rgba(148,163,184,0.7)"
-              strokeWidth={1.5}
-            />
-          ) : null}
+          {/* running (amber, dim fill) */}
+          <polygon
+            points={polygonPoints(runVals, runNormMax)}
+            fill="#ff9e1f"
+            fillOpacity={0.1}
+            stroke="#ff9e1f"
+            strokeWidth={1.2}
+            strokeDasharray="3 2"
+          />
 
-          {/* Current step (front) */}
-          {current !== null ? (
-            <path
-              d={polygonPath(current, maxCurrent)}
-              fill="rgba(52,211,153,0.25)"
-              stroke="#34d399"
-              strokeWidth={2}
-            />
-          ) : null}
+          {/* current step (phosphor) */}
+          <polygon
+            points={polygonPoints(stepVals, 1.0)}
+            fill="#39ff14"
+            fillOpacity={0.12}
+            stroke="#39ff14"
+            strokeWidth={1.6}
+          />
 
-          {/* Dots on current */}
-          {current !== null
-            ? AXES.map((dim, i) => {
-                const v = normalize(current[dim], maxCurrent);
-                const r = Math.max(0, v) * RADIUS;
-                const [x, y] = point(i, AXES.length, r);
-                return (
-                  <circle
-                    key={dim}
-                    cx={x}
-                    cy={y}
-                    r={3}
-                    fill="#34d399"
-                  />
-                );
-              })
-            : null}
-
-          {/* Labels */}
-          {AXES.map((dim, i) => {
-            const [x, y] = point(i, AXES.length, LABEL_RADIUS);
-            const a = axisAngle(i, AXES.length);
-            let anchor: "start" | "middle" | "end" = "middle";
-            if (Math.cos(a) > 0.2) anchor = "start";
-            else if (Math.cos(a) < -0.2) anchor = "end";
+          {/* axis labels */}
+          {REWARD_DIMENSIONS.map((dim, i) => {
+            const [x, y] = polar(i, RADIUS + 18);
             return (
               <text
                 key={dim}
                 x={x}
                 y={y}
-                fill="#94a3b8"
-                fontSize={11}
-                textAnchor={anchor}
+                fill="#9b9790"
+                fontSize={10}
+                fontFamily="var(--font-mono)"
+                textAnchor="middle"
                 dominantBaseline="middle"
+                letterSpacing="0.14em"
               >
-                {AXIS_LABELS[dim]}
+                {LABEL[dim]}
               </text>
             );
           })}
         </svg>
-      </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-        {AXES.map((dim) => (
-          <div
-            key={dim}
-            className="flex items-center justify-between border-b border-slate-800/60 py-1"
-          >
-            <dt className="text-slate-400">{AXIS_LABELS[dim]}</dt>
-            <dd className="tabular-nums text-slate-200">
-              {current !== null ? current[dim].toFixed(2) : "—"}
-            </dd>
-          </div>
-        ))}
-        <div className="col-span-2 flex items-center justify-between pt-2 text-sm">
-          <dt className="font-semibold text-slate-300">Total (step)</dt>
-          <dd className="tabular-nums font-semibold text-emerald-300">
-            {current !== null ? current.total.toFixed(3) : "—"}
-          </dd>
+        {/* per-dim rail */}
+        <div className="grid w-full grid-cols-6 gap-1 text-[10px] tracking-widest">
+          {REWARD_DIMENSIONS.map((d) => {
+            const v = step[d];
+            const positive = v >= 0;
+            return (
+              <div
+                key={d}
+                className="flex flex-col items-center border border-(--color-border) bg-(--color-panel-2) py-1"
+              >
+                <span className="text-(--color-fg-muted)">{LABEL[d]}</span>
+                <span
+                  className={`data ${
+                    positive
+                      ? "text-(--color-phosphor)"
+                      : "text-(--color-red)"
+                  }`}
+                >
+                  {sign(v, 2)}
+                </span>
+              </div>
+            );
+          })}
         </div>
-      </dl>
-    </section>
+      </div>
+    </Panel>
   );
 }

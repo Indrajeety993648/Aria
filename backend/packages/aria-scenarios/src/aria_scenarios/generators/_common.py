@@ -19,6 +19,7 @@ from aria_scenarios.data import (
     CONTACTS,
     EMAIL_SUBJECTS,
     EVENT_TITLES,
+    HINGLISH_EMAIL_SUBJECTS,
     TASK_TITLES,
 )
 from aria_scenarios.rng import choice, integer, pref_vector, sample, uniform
@@ -65,6 +66,27 @@ def build_relationships(
             "vendor": "formal", "other": "casual",
         }[kind]
 
+        # HIDDEN: per-contact mood. Drives the partial-observability mechanic
+        # (see env_service.actions.send_msg / draft_reply). Mood is NEVER
+        # exposed in AriaObservation — agents must INFER it from inbox
+        # sentiment + last_contact_hours. Wider variance on harder scenarios
+        # to make the inference problem harder.
+        mood_range = {
+            "easy":   (-0.20, 0.40),
+            "medium": (-0.50, 0.40),
+            "hard":   (-0.85, 0.50),
+        }[difficulty]
+        current_mood = uniform(rng, *mood_range)
+
+        # Code-mix Hindi-English mechanic. Family + close friends + partner
+        # default to hinglish at higher difficulty (cultural realism for the
+        # Indian-market target user). Mismatching the language costs reward.
+        hinglish_prob = {"easy": 0.0, "medium": 0.25, "hard": 0.45}[difficulty]
+        if kind in ("partner", "family", "friend") and rng.random() < hinglish_prob:
+            language_pref: str = "hinglish"
+        else:
+            language_pref = "en"
+
         nodes.append(
             RelationshipNode(
                 contact_id=cid,
@@ -74,6 +96,8 @@ def build_relationships(
                 trust=uniform(rng, 0.5, 0.95),
                 last_contact_hours=age,
                 tone_preference=tone,  # type: ignore[arg-type]
+                current_mood=current_mood,
+                language_preference=language_pref,  # type: ignore[arg-type]
             )
         )
     return nodes
@@ -126,15 +150,29 @@ def build_inbox(
     difficulty: Difficulty,
     senders: list[str],
     n_override: int | None = None,
+    *,
+    hinglish_senders: set[str] | None = None,
 ) -> list[InboxItem]:
+    """Generate the inbox.
+
+    If `hinglish_senders` is provided, messages from those contacts use the
+    Hindi/Hinglish subject pool — agent must reply in matching language.
+    """
     n = n_override if n_override is not None else DIFFICULTY_KNOBS[difficulty]["n_inbox"]
     items: list[InboxItem] = []
+    hinglish_senders = hinglish_senders or set()
     for i in range(n):
+        sender_id = choice(rng, senders) if senders else "c_other"
+        subject = (
+            choice(rng, HINGLISH_EMAIL_SUBJECTS)
+            if sender_id in hinglish_senders
+            else choice(rng, EMAIL_SUBJECTS)
+        )
         items.append(
             InboxItem(
                 email_id=f"em_{i:04d}",
-                sender_id=choice(rng, senders) if senders else "c_other",
-                subject=choice(rng, EMAIL_SUBJECTS),
+                sender_id=sender_id,
+                subject=subject,
                 urgency=uniform(rng, 0.05, 0.7),  # bulk = low/mid urgency
                 age_hours=uniform(rng, 0.5, 48.0),
                 requires_reply=bool(rng.random() < 0.6),

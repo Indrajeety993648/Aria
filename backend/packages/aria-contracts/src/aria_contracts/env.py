@@ -105,7 +105,14 @@ class InboxItem(BaseModel):
 
 
 class RelationshipNode(BaseModel):
-    """One contact in the relationship graph."""
+    """One contact in the relationship graph.
+
+    The base fields (contact_id, name, kind, closeness, trust, last_contact_hours,
+    tone_preference) are always populated. The "simulated person" fields below
+    are optional so older consumers (and serialized snapshots) still validate;
+    the env populates them when it wants extra realism, and the reward function
+    reads them when present.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -120,6 +127,41 @@ class RelationshipNode(BaseModel):
     trust: float = Field(ge=0.0, le=1.0, default=0.5)
     last_contact_hours: float = Field(ge=0.0)
     tone_preference: Literal["formal", "casual", "warm", "direct"] = "casual"
+
+    # --- extended SimulatedPerson fields (all optional, see docstring) ------
+    response_speed_minutes: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Expected minutes before this person responds to messages.",
+    )
+    patience: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="0 = annoyed by quick follow-ups, 1 = tolerates many.",
+    )
+    current_mood: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+        description="Mood at this point in the simulation; affects response quality.",
+    )
+    communication_history: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Recent interactions: [{ts_h, kind, sentiment, outcome}]. Bounded short list.",
+    )
+    constraints: dict[str, Any] | None = Field(
+        default=None,
+        description="Dietary, schedule, budget or other per-person constraints.",
+    )
+    language_preference: Literal["en", "hi", "hinglish"] | None = Field(
+        default=None,
+        description=(
+            "Preferred reply language. 'en' = English, 'hi' = pure Hindi, "
+            "'hinglish' = code-mixed Hindi-English. The agent must match this "
+            "or pay a `scenario_objective_hurt` penalty in `user_satisfaction`."
+        ),
+    )
 
 
 class PendingTask(BaseModel):

@@ -1,14 +1,13 @@
 /**
- * TypeScript mirrors of the `aria-contracts` Pydantic models.
- *
- * These must stay in lock-step with
- *   backend/packages/aria-contracts/src/aria_contracts/*.py
- * Field names use snake_case because Pydantic emits snake_case JSON.
+ * TypeScript mirrors of `backend/packages/aria-contracts/src/aria_contracts/*.py`.
+ * Keep snake_case — Pydantic emits snake_case over the wire.
+ * This is the ONE source of TS truth; regenerate by hand if the Pydantic
+ * models change (CI check lives in aria-contracts tests).
  */
 
-// ---------------------------------------------------------------------------
-// Action space — 15 discrete actions
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// action space
+// -----------------------------------------------------------------------------
 
 export const ActionId = {
   SEND_MSG: 0,
@@ -30,17 +29,34 @@ export const ActionId = {
 
 export type ActionIdValue = (typeof ActionId)[keyof typeof ActionId];
 
-export const NUM_ACTIONS: number = Object.keys(ActionId).length;
+export const ACTION_NAMES: Record<number, string> = {
+  0: "SEND_MSG",
+  1: "SCHEDULE",
+  2: "RESCHEDULE",
+  3: "CANCEL",
+  4: "DELEGATE",
+  5: "DRAFT_REPLY",
+  6: "SET_REMINDER",
+  7: "PURCHASE",
+  8: "RESOLVE_CONFLICT",
+  9: "ASK_USER",
+  10: "DECLINE_INVITE",
+  11: "PROPOSE_ALTERNATIVE",
+  12: "BATCH_ACTION",
+  13: "WAIT",
+  14: "ESCALATE",
+};
 
 export interface AriaAction {
   action_id: number;
   target_id?: string | null;
   payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
-// ---------------------------------------------------------------------------
-// Observation sub-models
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// observation sub-models
+// -----------------------------------------------------------------------------
 
 export type Location = "home" | "office" | "commute" | "other";
 
@@ -88,8 +104,6 @@ export interface RelationshipNode {
   tone_preference: TonePreference;
 }
 
-export type TaskStatus = "open" | "assigned" | "done" | "blocked";
-
 export interface PendingTask {
   task_id: string;
   title: string;
@@ -98,12 +112,8 @@ export interface PendingTask {
   estimated_minutes: number;
   delegatable: boolean;
   assignee_id?: string | null;
-  status: TaskStatus;
+  status: "open" | "assigned" | "done" | "blocked";
 }
-
-// ---------------------------------------------------------------------------
-// Observation
-// ---------------------------------------------------------------------------
 
 export type ScenarioCategory =
   | "calendar_conflict"
@@ -115,58 +125,9 @@ export type ScenarioCategory =
 
 export type Difficulty = "easy" | "medium" | "hard";
 
-export interface AriaObservation {
-  // OpenEnv base fields
-  done: boolean;
-  reward: number;
-  metadata: Record<string, unknown>;
-
-  time: number;
-  location: Location;
-  calendar: CalendarEvent[];
-  inbox: InboxItem[];
-  relationships: RelationshipNode[];
-  pending_tasks: PendingTask[];
-  preferences: number[];
-
-  scenario_category?: ScenarioCategory | null;
-  difficulty?: Difficulty | null;
-
-  step_count: number;
-  max_steps: number;
-
-  reward_breakdown?: RewardBreakdown | null;
-}
-
-// ---------------------------------------------------------------------------
-// Reward
-// ---------------------------------------------------------------------------
-
-export const REWARD_WEIGHTS: Readonly<Record<RewardDimension, number>> = {
-  task_completion: 0.25,
-  relationship_health: 0.2,
-  user_satisfaction: 0.2,
-  time_efficiency: 0.15,
-  conflict_resolution: 0.15,
-  safety: 0.05,
-};
-
-export type RewardDimension =
-  | "task_completion"
-  | "relationship_health"
-  | "user_satisfaction"
-  | "time_efficiency"
-  | "conflict_resolution"
-  | "safety";
-
-export const REWARD_DIMENSIONS: readonly RewardDimension[] = [
-  "task_completion",
-  "relationship_health",
-  "user_satisfaction",
-  "time_efficiency",
-  "conflict_resolution",
-  "safety",
-] as const;
+// -----------------------------------------------------------------------------
+// observation + reward
+// -----------------------------------------------------------------------------
 
 export interface RewardBreakdown {
   task_completion: number;
@@ -178,9 +139,27 @@ export interface RewardBreakdown {
   total: number;
 }
 
-// ---------------------------------------------------------------------------
-// Gateway events
-// ---------------------------------------------------------------------------
+export interface AriaObservation {
+  done: boolean;
+  reward: number | null;
+  metadata: Record<string, unknown>;
+  time: number;
+  location: Location;
+  calendar: CalendarEvent[];
+  inbox: InboxItem[];
+  relationships: RelationshipNode[];
+  pending_tasks: PendingTask[];
+  preferences: number[];
+  scenario_category?: ScenarioCategory | null;
+  difficulty?: Difficulty | null;
+  step_count: number;
+  max_steps: number;
+  reward_breakdown?: RewardBreakdown | null;
+}
+
+// -----------------------------------------------------------------------------
+// gateway events
+// -----------------------------------------------------------------------------
 
 export type GwEventKind =
   | "session_start"
@@ -200,31 +179,26 @@ export interface GwAgentEvent {
   ts_ms: number;
 }
 
-export interface GwSessionStart {
-  session_id: string;
-  mode: "live" | "simulated";
-}
+// -----------------------------------------------------------------------------
+// reward weights — mirror REWARD_WEIGHTS for radar chart
+// -----------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Memory
-// ---------------------------------------------------------------------------
+export const REWARD_WEIGHTS = {
+  task_completion: 0.25,
+  relationship_health: 0.2,
+  user_satisfaction: 0.2,
+  time_efficiency: 0.15,
+  conflict_resolution: 0.15,
+  safety: 0.05,
+} as const;
 
-export type MemoryNamespace =
-  | "episodic"
-  | "semantic"
-  | "relationship"
-  | "preference";
+export const REWARD_DIMENSIONS = [
+  "task_completion",
+  "relationship_health",
+  "user_satisfaction",
+  "time_efficiency",
+  "conflict_resolution",
+  "safety",
+] as const;
 
-// ---------------------------------------------------------------------------
-// Voice
-// ---------------------------------------------------------------------------
-
-export interface VoiceTranscript {
-  session_id: string;
-  text: string;
-  is_final: boolean;
-  confidence: number;
-  start_ms: number;
-  end_ms: number;
-  lang: string;
-}
+export type RewardDimension = (typeof REWARD_DIMENSIONS)[number];

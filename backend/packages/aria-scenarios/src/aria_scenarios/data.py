@@ -28,6 +28,28 @@ EMAIL_SUBJECTS: list[str] = [
     "Reminder: parent-teacher meeting",
 ]
 
+# Hindi / Hinglish subjects used when a contact's language_preference is set.
+# Mix of Devanagari and Roman-script Hindi (the way Indian users actually
+# write on email + WhatsApp). The agent must pick `payload.lang="hi"` or
+# `"hinglish"` accordingly.
+HINGLISH_EMAIL_SUBJECTS: list[str] = [
+    "kal ka plan kya hai?",
+    "Bhai jaldi reply kar",
+    "URGENT: meeting cancel kar dena",
+    "Aaj raat dinner karein?",
+    "tum free ho?",
+    "Mom ka phone aaya tha",
+    "Project deadline pe baat karni hai",
+    "Birthday party shaam ko",
+]
+HINDI_EMAIL_SUBJECTS: list[str] = [
+    "क्या आप कल मिल सकते हैं?",
+    "ज़रूरी: मीटिंग रद्द कर दीजिए",
+    "रात के खाने का प्लान क्या है?",
+    "जन्मदिन की पार्टी आज शाम",
+    "क्या आप ठीक हैं?",
+]
+
 EVENT_TITLES: list[str] = [
     "Team standup",
     "1:1 with Priya",

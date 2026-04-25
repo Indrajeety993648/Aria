@@ -1,86 +1,125 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { GwAgentEvent, GwEventKind } from "@/lib/contracts";
+import { Panel } from "./Panel";
+
+const KIND_COLOR: Record<GwEventKind, string> = {
+  session_start:    "text-(--color-fg-dim)",
+  partial_transcript:"text-(--color-fg-muted)",
+  final_transcript: "text-(--color-fg)",
+  tool_call:        "text-(--color-cyan)",
+  reply_text:       "text-(--color-amber)",
+  tts_chunk:        "text-(--color-fg-muted)",
+  env_step:         "text-(--color-phosphor)",
+  reward:           "text-(--color-phosphor)",
+  error:            "text-(--color-red)",
+};
+
+const KIND_ABBR: Record<GwEventKind, string> = {
+  session_start:    "SES",
+  partial_transcript:"PARTL",
+  final_transcript: "FINAL",
+  tool_call:        "TOOL",
+  reply_text:       "REPLY",
+  tts_chunk:        "TTS",
+  env_step:         "STEP",
+  reward:           "RWD",
+  error:            "ERR",
+};
 
 interface EventTraceProps {
   events: GwAgentEvent[];
 }
 
-const KIND_CLASS: Readonly<Record<GwEventKind, string>> = {
-  session_start: "bg-slate-700/30 text-slate-300 border-slate-600/40",
-  partial_transcript: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-  final_transcript: "bg-sky-500/25 text-sky-200 border-sky-500/40",
-  tool_call: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-  reply_text: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  tts_chunk: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
-  env_step: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  reward: "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
-  error: "bg-red-500/15 text-red-300 border-red-500/30",
-};
+function previewPayload(ev: GwAgentEvent): string {
+  const p = ev.payload ?? {};
+  if (typeof p === "object") {
+    if ("text" in p && typeof p.text === "string") return p.text;
+    if ("tool_name" in p) {
+      const args =
+        "arguments" in p && p.arguments
+          ? JSON.stringify(p.arguments).slice(0, 40)
+          : "";
+      return `${p.tool_name as string} ${args}`;
+    }
+    if ("action" in p) {
+      const tgt = "target" in p ? ` → ${p.target as string}` : "";
+      return `${p.action as string}${tgt}`;
+    }
+    if ("total" in p) {
+      return `Δ=${Number(p.total).toFixed(3)}`;
+    }
+    const s = JSON.stringify(p);
+    return s.length > 80 ? s.slice(0, 77) + "…" : s;
+  }
+  return String(p);
+}
 
-function formatTs(ts: number): string {
+function tsLabel(ts: number): string {
   const d = new Date(ts);
-  const pad = (n: number, w = 2): string => n.toString().padStart(w, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+  const h = String(d.getUTCHours()).padStart(2, "0");
+  const m = String(d.getUTCMinutes()).padStart(2, "0");
+  const s = String(d.getUTCSeconds()).padStart(2, "0");
+  const ms = String(d.getUTCMilliseconds()).padStart(3, "0");
+  return `${h}:${m}:${s}.${ms}`;
 }
 
-function truncate(s: string, n: number): string {
-  return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
-}
-
-export function EventTrace({ events }: EventTraceProps): React.JSX.Element {
+export function EventTrace({ events }: EventTraceProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const rows = useMemo(() => events.slice().reverse(), [events]);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el !== null) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [events]);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [events.length]);
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-          Event trace
-        </h2>
-        <span className="text-xs text-slate-500">
-          {events.length} event{events.length === 1 ? "" : "s"}
+    <Panel
+      label="EVENT // TRACE"
+      meta={
+        <span className="tracking-widest">
+          <span className="text-(--color-fg-muted) mr-1">N</span>
+          <span className="data text-(--color-fg-dim)">
+            {String(events.length).padStart(4, "0")}
+          </span>
         </span>
-      </div>
-      <div
-        ref={scrollRef}
-        className="mt-3 max-h-[320px] overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/50 p-2 font-mono text-[12px] leading-relaxed"
-      >
-        {events.length === 0 ? (
-          <div className="p-3 text-slate-600">No events yet...</div>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {events.map((ev, idx) => {
-              const payloadJson = truncate(JSON.stringify(ev.payload), 160);
-              return (
-                <li
-                  key={`${ev.ts_ms}-${idx}`}
-                  className="flex items-start gap-2 px-2 py-1"
-                >
-                  <span className="w-[100px] shrink-0 text-slate-600">
-                    {formatTs(ev.ts_ms)}
-                  </span>
+      }
+      stateDot="live"
+      className="h-full"
+    >
+      <div ref={scrollRef} className="h-full overflow-auto">
+        <table className="w-full border-collapse text-[11px]">
+          <thead className="sticky top-0 z-10 bg-(--color-panel-2) text-(--color-fg-muted)">
+            <tr className="border-b border-(--color-border)">
+              <th className="px-2 py-1 text-left tracking-widest font-normal">TS</th>
+              <th className="px-2 py-1 text-left tracking-widest font-normal">KIND</th>
+              <th className="px-2 py-1 text-left tracking-widest font-normal">PAYLOAD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((ev, i) => (
+              <tr
+                key={`${ev.ts_ms}-${i}`}
+                className="border-b border-(--color-border)/60 hover:bg-(--color-hover)"
+              >
+                <td className="px-2 py-1 align-top text-(--color-fg-muted) data">
+                  {tsLabel(ev.ts_ms)}
+                </td>
+                <td className="px-2 py-1 align-top">
                   <span
-                    className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${KIND_CLASS[ev.kind]}`}
+                    className={`inline-block w-[48px] text-center font-bold tracking-widest ${KIND_COLOR[ev.kind]}`}
                   >
-                    {ev.kind}
+                    {KIND_ABBR[ev.kind]}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-slate-300">
-                    {payloadJson}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                </td>
+                <td className="px-2 py-1 align-top text-(--color-fg-dim) break-all">
+                  {previewPayload(ev)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </section>
+    </Panel>
   );
 }

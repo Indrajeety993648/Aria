@@ -78,9 +78,19 @@ def send_msg(world: WorldModel, a: AriaAction) -> dict[str, Any]:
     payload = a.payload or {}
     affected = [contact.contact_id] if contact else []
     tone = payload.get("tone")
-    tone_mismatch = bool(
-        contact and tone and tone != contact.tone_preference
-    )
+
+    # Tone preference mismatch (existing signal)
+    pref_mismatch = bool(contact and tone and tone != contact.tone_preference)
+
+    # NEW: hidden-mood mismatch — direct/formal tone toward an upset contact
+    # is a strong relationship hit even if it matches their stated preference.
+    # The agent must INFER mood from inbox sentiment; mood itself is never
+    # exposed on the observation. This is the partial-observability axis.
+    mood_mismatch = False
+    if contact is not None and contact.current_mood is not None and tone:
+        if contact.current_mood < -0.30 and tone in ("direct", "formal"):
+            mood_mismatch = True
+    tone_mismatch = pref_mismatch or mood_mismatch
 
     closeness_delta = 0.0
     high_stakes = bool(payload.get("high_stakes"))
@@ -91,9 +101,19 @@ def send_msg(world: WorldModel, a: AriaAction) -> dict[str, Any]:
         # Small closeness boost for good-tone contact
         contact.closeness = min(1.0, contact.closeness + 0.01)
         closeness_delta += 0.02
+        # Warm/casual replies to an upset contact gradually heal the mood.
+        if (
+            contact.current_mood is not None
+            and contact.current_mood < 0.0
+            and tone in ("warm", "casual")
+        ):
+            contact.current_mood = min(1.0, contact.current_mood + 0.10)
+    elif contact and mood_mismatch and contact.current_mood is not None:
+        # Wrong tone toward an already-upset contact deepens the mood.
+        contact.current_mood = max(-1.0, contact.current_mood - 0.10)
 
     objective_met = False
-    if contact is not None and tone and tone == contact.tone_preference:
+    if contact is not None and tone and tone == contact.tone_preference and not mood_mismatch:
         objective_met = _objective_hit(world, "reply_with_correct_tone", a.target_id)
 
     return {
@@ -101,6 +121,7 @@ def send_msg(world: WorldModel, a: AriaAction) -> dict[str, Any]:
         "affected_contacts": affected,
         "closeness_delta": closeness_delta,
         "tone_mismatch": tone_mismatch,
+        "mood_mismatch": mood_mismatch,
         "high_stakes": high_stakes,
         "user_approved": user_approved,
         "scenario_objective_met": objective_met,
@@ -174,6 +195,10 @@ def cancel(world: WorldModel, a: AriaAction) -> dict[str, Any]:
     )
     proposed_alt = bool((a.payload or {}).get("proposed_alternative", False))
 
+    # Capture metadata BEFORE removing the event so cascades can use it.
+    cancelled_participants = list(evt.participant_ids)
+    cancelled_day = int(evt.day_offset)
+
     # Remove the event
     world.calendar = [e for e in world.calendar if e.event_id != evt.event_id]
 
@@ -204,6 +229,9 @@ def cancel(world: WorldModel, a: AriaAction) -> dict[str, Any]:
         "conflict_resolved": conflict_resolved,
         "conflict_sacrifice": conflict_sacrifice,
         "scenario_objective_hurt": affected_high and not proposed_alt,
+        # Cascade inputs (consumed by _apply_cascades)
+        "cancel_participants": cancelled_participants,
+        "cancel_day": cancelled_day,
     }
 
 
@@ -241,17 +269,58 @@ def draft_reply(world: WorldModel, a: AriaAction) -> dict[str, Any]:
     payload = a.payload or {}
     tone = payload.get("tone")
     contact = world.find_contact(email.sender_id)
-    tone_mismatch = bool(contact and tone and tone != contact.tone_preference)
-    tone_match = bool(contact and tone and tone == contact.tone_preference)
+    pref_mismatch = bool(contact and tone and tone != contact.tone_preference)
+
+    # Hidden-mood gate (same logic as send_msg). Direct/formal tone toward an
+    # upset contact is a mismatch even if it matches their stated preference.
+    mood_mismatch = False
+    if contact is not None and contact.current_mood is not None and tone:
+        if contact.current_mood < -0.30 and tone in ("direct", "formal"):
+            mood_mismatch = True
+    tone_mismatch = pref_mismatch or mood_mismatch
+    tone_match = (
+        bool(contact and tone and tone == contact.tone_preference)
+        and not mood_mismatch
+    )
+
     objective_met_tone = False
     if tone_match:
         objective_met_tone = _objective_hit(
             world, "reply_with_correct_tone", email.email_id
         )
+
+    # Code-mix language gate. ONLY fires for non-English preferences
+    # (hi / hinglish) — agents must explicitly pass payload["lang"] matching
+    # those. English-preferring contacts skip the check so the bulk of the
+    # population doesn't see a mechanic they don't need.
+    language_mismatch = False
+    if (
+        contact is not None
+        and contact.language_preference is not None
+        and contact.language_preference != "en"
+    ):
+        agent_lang = (payload.get("lang") or "en").lower()
+        if agent_lang != contact.language_preference:
+            language_mismatch = True
+
+    # Mutate mood: warm/casual reply to an upset contact heals; bad-tone
+    # reply to an upset contact deepens the funk.
+    if contact is not None and contact.current_mood is not None:
+        if not tone_mismatch and tone in ("warm", "casual") and contact.current_mood < 0.0:
+            contact.current_mood = min(1.0, contact.current_mood + 0.10)
+        elif mood_mismatch:
+            contact.current_mood = max(-1.0, contact.current_mood - 0.10)
+
     return {
         "success": True,
         "tone_mismatch": tone_mismatch,
-        "scenario_objective_met": objective_met_urgent or objective_met_tone,
+        "mood_mismatch": mood_mismatch,
+        "language_mismatch": language_mismatch,
+        "scenario_objective_met": (
+            (objective_met_urgent or objective_met_tone)
+            and not language_mismatch
+        ),
+        "scenario_objective_hurt": language_mismatch,
     }
 
 
@@ -464,11 +533,89 @@ HANDLERS: dict[int, Callable[[WorldModel, AriaAction], dict[str, Any]]] = {
 }
 
 
+def _apply_cascades(
+    world: WorldModel, action: AriaAction, outcome: dict[str, Any]
+) -> None:
+    """Mutate `world` with second-order effects of the action.
+
+    Cascades persist for the rest of the episode and are observable in the
+    NEXT observation — they're hard to game because the consequences come
+    later, not at the same step.
+
+    Modeled effects (each is a known psychological pattern):
+      - CANCEL on a high-closeness contact without alternative
+        → that contact's future events get less flexible
+        → their future inbox messages are filed at lower urgency
+        (passive-aggressive: they stop signaling things as urgent because
+         they've stopped relying on you)
+      - DECLINE_INVITE on a close contact
+        → mild version of the same passive-aggressive pattern
+      - RESOLVE_CONFLICT (success)
+        → permanent trust boost on the affected contact
+        → their future events become MORE flexible (cooperation reciprocates)
+      - PROPOSE_ALTERNATIVE (success)
+        → contact's mood improves (relationship-preserving cancel)
+    """
+    aid = action.action_id
+
+    # ---------- damaging cascades -----------------------------------------
+    if (
+        aid == ActionId.CANCEL.value
+        and outcome.get("affected_high_closeness")
+        and not outcome.get("proposed_alternative")
+    ):
+        affected = outcome.get("cancel_participants") or []
+        cancelled_day = int(outcome.get("cancel_day") or 0)
+        for cid in affected:
+            # All future events that include this contact lose flexibility.
+            for evt in world.calendar:
+                if evt.day_offset > cancelled_day and cid in evt.participant_ids:
+                    evt.flexibility = max(0.0, evt.flexibility - 0.30)
+            # All future inbox messages from this contact get muted urgency.
+            for em in world.inbox:
+                if em.sender_id == cid:
+                    em.urgency = max(0.0, em.urgency * 0.70)
+
+    elif aid == ActionId.DECLINE_INVITE.value and outcome.get("success"):
+        # Lighter version — they're a bit less generous next time.
+        evt_id = action.target_id
+        # The invite has been removed; we can't see participants here.
+        # Mark it via the contact graph: any contact whose closeness dropped
+        # this step gets a small flexibility hit on their future events.
+        # Conservative: only contacts the action explicitly affected.
+        for cid in outcome.get("cancel_participants") or []:
+            for evt in world.calendar:
+                if cid in evt.participant_ids:
+                    evt.flexibility = max(0.0, evt.flexibility - 0.10)
+
+    # ---------- helpful cascades ------------------------------------------
+    if aid == ActionId.RESOLVE_CONFLICT.value and outcome.get("success"):
+        meta = world.hidden.get("primary_conflict") or {}
+        contact_id = meta.get("high_closeness_contact")
+        c = world.find_contact(contact_id)
+        if c is not None:
+            c.trust = min(1.0, c.trust + 0.05)
+            for evt in world.calendar:
+                if c.contact_id in evt.participant_ids:
+                    evt.flexibility = min(1.0, evt.flexibility + 0.10)
+
+    if aid == ActionId.PROPOSE_ALTERNATIVE.value and outcome.get("success"):
+        evt = world.find_event(action.target_id)
+        if evt is not None:
+            for pid in evt.participant_ids:
+                c = world.find_contact(pid)
+                if c is not None and c.current_mood is not None:
+                    c.current_mood = min(1.0, c.current_mood + 0.15)
+
+
 def dispatch(world: WorldModel, action: AriaAction) -> dict[str, Any]:
     handler = HANDLERS.get(action.action_id)
     if handler is None:
         return {"success": False, "reason": "unknown_action"}
     outcome = handler(world, action)
+
+    # Apply second-order effects on world state. Persistent for the episode.
+    _apply_cascades(world, action, outcome)
 
     # Global housekeeping
     world.step_count += 1

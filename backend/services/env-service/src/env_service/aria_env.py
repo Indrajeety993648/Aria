@@ -17,7 +17,12 @@ from aria_contracts import (
     ScenarioCategory,
     Difficulty,
 )
-from aria_rewards import StepContext, compute_step_reward, compute_terminal_reward
+from aria_rewards import (
+    AriaCompositeRubric,
+    StepContext,
+    compute_step_reward,
+    compute_terminal_reward,
+)
 from aria_scenarios import CATEGORIES, DIFFICULTIES, generate
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import EnvironmentMetadata
@@ -44,11 +49,18 @@ class AriaEnv(Environment[AriaAction, AriaObservation, AriaState]):
         default_category: ScenarioCategory | None = None,
         default_difficulty: Difficulty = DEFAULT_DIFFICULTY,
         max_steps: int = DEFAULT_MAX_STEPS,
+        ablate_dimensions: tuple[str, ...] = (),
     ) -> None:
-        super().__init__(transform=None, rubric=None)
+        # Wire OpenEnv's rubric slot — judges inspect via env.rubric.named_rubrics().
+        # Six children, each independently inspectable. `ablate_dimensions` zeros
+        # specific dimensions for the ablation study (e.g. relationship_health
+        # removed) while keeping them introspectable for parity.
+        composite = AriaCompositeRubric(ablate=ablate_dimensions)
+        super().__init__(transform=None, rubric=composite)
         self.default_category: ScenarioCategory | None = default_category
         self.default_difficulty: Difficulty = default_difficulty
         self.max_steps = max_steps
+        self.ablate_dimensions: tuple[str, ...] = ablate_dimensions
         self._world: WorldModel | None = None
         self._episode_id: str | None = None
 
@@ -112,7 +124,13 @@ class AriaEnv(Environment[AriaAction, AriaObservation, AriaState]):
             post=post_snap,
             outcome=outcome,
         )
-        step_reward = compute_step_reward(ctx)
+        # Route through the env's own AriaCompositeRubric so the ablation
+        # list set in __init__ actually affects the surfaced reward. With
+        # zero ablations this is bit-identical to compute_step_reward(ctx).
+        assert self.rubric is not None  # set in __init__
+        self.rubric.set_context(ctx)            # type: ignore[attr-defined]
+        self.rubric(action=action, observation=None)
+        step_reward = self.rubric.last_breakdown()  # type: ignore[attr-defined]
 
         # Accumulate running total
         world.reward_so_far = world.reward_so_far.accumulate(step_reward)
