@@ -53,7 +53,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", type=str, default="./checkpoints/aria-grpo")
     p.add_argument("--steps", type=int, default=500)
     p.add_argument("--num-generations", type=int, default=4,
-                   help="GRPO rollouts per prompt (default 4)")
+                   help="GRPO rollouts per prompt (default 4; quick=2)")
     p.add_argument("--lr", type=float, default=1e-6)
     p.add_argument("--kl-beta", type=float, default=0.04)
     p.add_argument("--max-prompt-len", type=int, default=1024)
@@ -69,7 +69,41 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--num-prompts", type=int, default=2000,
                    help="Number of unique training prompts to pre-generate")
     p.add_argument("--wandb-project", type=str, default="aria-openenv-hackathon")
-    return p.parse_args()
+
+    # ---- Speed knobs --------------------------------------------------------
+    p.add_argument("--use-vllm", action="store_true",
+                   help="Route rollouts through vLLM (5-10x faster). "
+                        "Requires `pip install vllm`. Sets vllm_gpu_memory_utilization=0.35 "
+                        "by default to leave room for training.")
+    p.add_argument("--vllm-mem", type=float, default=0.35,
+                   help="vLLM GPU memory share (0..1). Lower if OOM during training.")
+    p.add_argument(
+        "--quick", action="store_true",
+        help="Fast preset for hackathon-time T4 runs: steps=200, num_generations=2, "
+             "max_completion_len=64, max_prompt_len=768, per_device_batch=4. "
+             "Reduces a 10h run to ~30-45 min while keeping the learning curve visible. "
+             "Overrides the corresponding flags unless you set them AFTER --quick on the command line."
+    )
+    args = p.parse_args()
+
+    # Apply --quick AFTER parsing so explicit flags after `--quick` win.
+    if args.quick:
+        # Detect which knobs the user explicitly set so --quick doesn't clobber them.
+        # argparse doesn't expose this directly; we infer from the raw argv.
+        explicit = {a.lstrip("-").split("=")[0].replace("-", "_")
+                    for a in sys.argv[1:] if a.startswith("--")}
+
+        def _maybe(name: str, value):
+            if name not in explicit:
+                setattr(args, name, value)
+        _maybe("steps", 200)
+        _maybe("num_generations", 2)
+        _maybe("max_completion_len", 64)
+        _maybe("max_prompt_len", 768)
+        _maybe("per_device_batch", 4)
+        _maybe("grad_accum", 1)
+
+    return args
 
 
 def _build_dataset(args: argparse.Namespace, ablate: tuple[str, ...]):
@@ -112,6 +146,9 @@ def main() -> int:
     print(f"=== ARIA GRPO === run={args.run_name} ablate={ablate or '()'}")
     print(f"    model={args.model_id}  steps={args.steps}  "
           f"generations={args.num_generations}  lr={args.lr}")
+    print(f"    batch={args.per_device_batch}*grad_accum={args.grad_accum}  "
+          f"prompt_len={args.max_prompt_len}  completion_len={args.max_completion_len}  "
+          f"vllm={args.use_vllm}  quick={args.quick}")
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, padding_side="left")
     if tokenizer.pad_token_id is None:
@@ -128,6 +165,15 @@ def main() -> int:
         task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
+
+    grpo_kwargs: dict = {}
+    if args.use_vllm:
+        # Best case: 5-10x speedup on rollouts via vLLM continuous batching.
+        # vllm_gpu_memory_utilization sets vLLM's slice; the remainder is for
+        # the training forward/backward. T4 (16 GB): 0.35 leaves ~10 GB for
+        # training, more than enough for Qwen 0.5B + LoRA.
+        grpo_kwargs["use_vllm"] = True
+        grpo_kwargs["vllm_gpu_memory_utilization"] = args.vllm_mem
 
     config = GRPOConfig(
         output_dir=str(output_dir),
@@ -159,6 +205,7 @@ def main() -> int:
         gradient_checkpointing=False,
         report_to=["wandb"] if os.getenv("WANDB_API_KEY") else ["none"],
         seed=args.seed,
+        **grpo_kwargs,
     )
 
     reward_fn = make_reward_fn(ablate_dimensions=ablate)
