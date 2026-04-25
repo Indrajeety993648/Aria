@@ -66,9 +66,33 @@ def make_reward_fn(
 
     Expects the prompt to embed `[[ARIA_SEED <int> <category> <difficulty>]]`
     in any text content (rollout.py puts it in the system message).
+
+    Reward shaping (small instruct models need this):
+      * total off-format               → parse_failure_penalty   (-0.5)
+      * mentions ACTION keyword         → parse_failure_penalty + 0.15
+      * has ACTION + TARGET keywords    → parse_failure_penalty + 0.30
+      * parses but env errors           → parse_failure_penalty + 0.40
+      * parses + env steps              → real env reward
+    Without shaping, GRPO sees zero variance until the model stumbles into
+    a fully parseable completion — which can take thousands of steps for
+    Qwen 0.5B. Shaping gives a gradient from "no format" → "format" → "good action".
     """
     import re
     _RE_SEED = re.compile(r"\[\[ARIA_SEED\s+(\d+)\s+(\w+)\s+(\w+)\]\]")
+    _RE_HAS_ACTION = re.compile(r"\bACTION\b", re.IGNORECASE)
+    _RE_HAS_TARGET = re.compile(r"\bTARGET\b", re.IGNORECASE)
+
+    def _format_partial_credit(text: str) -> float:
+        """Returns a value in [0, 0.30] — partial credit toward parse_failure_penalty."""
+        credit = 0.0
+        if _RE_HAS_ACTION.search(text):
+            credit += 0.15
+        if _RE_HAS_TARGET.search(text):
+            credit += 0.15
+        return credit
+
+    import os as _os
+    _DEBUG = _os.getenv("ARIA_REWARD_DEBUG") == "1"
 
     def reward_fn(prompts: Sequence[Any], completions: Sequence[Any], **_kw) -> list[float]:
         rewards: list[float] = []
@@ -76,10 +100,18 @@ def make_reward_fn(
             prompt_text = _to_text(prompt)
             completion_text = _to_text(completion)
 
+            if _DEBUG:
+                print(f"[reward_dbg] completion[:120]={completion_text[:120]!r}", flush=True)
+
             m = _RE_SEED.search(prompt_text)
             if not m:
+                if _DEBUG:
+                    print("[reward_dbg]   → no seed header", flush=True)
                 rewards.append(parse_failure_penalty)
                 continue
+
+            # Shaped baseline — anything below "valid action" maxes out here.
+            shaped_floor = parse_failure_penalty + _format_partial_credit(completion_text)
             seed = int(m.group(1))
             cat = m.group(2)
             diff = m.group(3)
@@ -89,14 +121,22 @@ def make_reward_fn(
 
             action, parse_failed = parse_action(completion_text)
             if parse_failed:
-                rewards.append(parse_failure_penalty)
+                if _DEBUG:
+                    print(f"[reward_dbg]   → parse FAILED, shaped={shaped_floor:.3f}", flush=True)
+                rewards.append(shaped_floor)
                 continue
 
             try:
                 obs = env.step(action)
-                rewards.append(float(obs.reward or 0.0))
-            except Exception:
-                rewards.append(parse_failure_penalty)
+                r = float(obs.reward or 0.0)
+                if _DEBUG:
+                    print(f"[reward_dbg]   → action={action.action_id}/{action.target_id} reward={r:.3f}", flush=True)
+                rewards.append(r)
+            except Exception as e:
+                if _DEBUG:
+                    print(f"[reward_dbg]   → env.step EXCEPTION: {e!r}, shaped={shaped_floor + 0.10:.3f}", flush=True)
+                # Parsed but env rejected — slightly above format-only credit.
+                rewards.append(shaped_floor + 0.10)
         return rewards
 
     return reward_fn

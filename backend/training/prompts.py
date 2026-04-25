@@ -42,6 +42,20 @@ Pick from these actions:
 
 Tone options: formal, casual, warm, direct.
 Language options: en, hi, hinglish.
+
+EXAMPLES — match this exact 3-line shape, nothing else:
+
+Example 1 (calendar conflict on D+00):
+ACTION: RESOLVE_CONFLICT
+TARGET: conflict_personal
+PAYLOAD: {}
+
+Example 2 (urgent email needing a warm reply):
+ACTION: DRAFT_REPLY
+TARGET: e_001
+PAYLOAD: {"tone":"warm","lang":"en"}
+
+Now respond to the observation below with the same 3-line shape.
 """
 
 

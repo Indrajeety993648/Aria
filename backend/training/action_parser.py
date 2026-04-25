@@ -19,9 +19,12 @@ from aria_contracts import ActionId, AriaAction
 _ACTION_NAME_TO_ID: dict[str, int] = {a.name: a.value for a in ActionId}
 _ACTION_ID_TO_NAME: dict[int, str] = {a.value: a.name for a in ActionId}
 
-_RE_ACTION = re.compile(r"^\s*ACTION\s*:\s*([\w]+)\s*$", re.MULTILINE | re.IGNORECASE)
-_RE_TARGET = re.compile(r"^\s*TARGET\s*:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
-_RE_PAYLOAD = re.compile(r"^\s*PAYLOAD\s*:\s*(.*)$", re.MULTILINE | re.IGNORECASE | re.DOTALL)
+# Accept :, /, =, or whitespace as separator. Small instruct-tuned models
+# (Qwen 0.5B) frequently emit `ACTION/X` or `ACTION X` instead of `ACTION: X`.
+_SEP = r"[\s:/=]+"
+_RE_ACTION = re.compile(rf"^\s*ACTION{_SEP}([\w]+)\s*$", re.MULTILINE | re.IGNORECASE)
+_RE_TARGET = re.compile(rf"^\s*TARGET{_SEP}(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+_RE_PAYLOAD = re.compile(rf"^\s*PAYLOAD{_SEP}(.*)$", re.MULTILINE | re.IGNORECASE | re.DOTALL)
 
 
 def _coerce_payload(raw: str) -> dict[str, Any]:

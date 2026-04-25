@@ -84,24 +84,39 @@ def _parse_args() -> argparse.Namespace:
              "Reduces a 10h run to ~30-45 min while keeping the learning curve visible. "
              "Overrides the corresponding flags unless you set them AFTER --quick on the command line."
     )
+    p.add_argument(
+        "--tight-vram", action="store_true",
+        help="Tight-VRAM preset for sub-8GB GPUs (e.g. RTX 3050 4GB). Enables "
+             "gradient checkpointing with use_reentrant=False (saves ~60%% "
+             "activation memory at ~30%% time cost) and tightens defaults: "
+             "lora_r=8, max_prompt_len=512, max_completion_len=48."
+    )
     args = p.parse_args()
 
-    # Apply --quick AFTER parsing so explicit flags after `--quick` win.
-    if args.quick:
-        # Detect which knobs the user explicitly set so --quick doesn't clobber them.
-        # argparse doesn't expose this directly; we infer from the raw argv.
-        explicit = {a.lstrip("-").split("=")[0].replace("-", "_")
-                    for a in sys.argv[1:] if a.startswith("--")}
+    # Apply presets AFTER parsing so explicit flags after them win.
+    explicit = {a.lstrip("-").split("=")[0].replace("-", "_")
+                for a in sys.argv[1:] if a.startswith("--")}
 
-        def _maybe(name: str, value):
-            if name not in explicit:
-                setattr(args, name, value)
+    def _maybe(name: str, value):
+        if name not in explicit:
+            setattr(args, name, value)
+
+    if args.quick:
         _maybe("steps", 200)
         _maybe("num_generations", 2)
         _maybe("max_completion_len", 64)
         _maybe("max_prompt_len", 768)
         _maybe("per_device_batch", 4)
         _maybe("grad_accum", 1)
+
+    if args.tight_vram:
+        # Tighter than --quick. Applied AFTER --quick so it wins on overlap.
+        _maybe("lora_r", 8)
+        _maybe("max_prompt_len", 512)
+        _maybe("max_completion_len", 48)
+        _maybe("per_device_batch", 1)
+        _maybe("grad_accum", 4)
+        _maybe("num_generations", 2)
 
     return args
 
@@ -192,17 +207,17 @@ def main() -> int:
             and torch.cuda.get_device_capability()[0] >= 8,
         fp16=torch.cuda.is_available()
             and torch.cuda.get_device_capability()[0] < 8,
-        # Gradient checkpointing OFF: Qwen 2.5 0.5B + LoRA fits a T4 (16 GB)
-        # comfortably without it (~3-4 GB peak). Enabling it triggers a known
-        # PEFT+checkpoint interaction where `requires_grad` doesn't propagate
-        # through the boundary, causing
-        #   RuntimeError: element 0 of tensors does not require grad …
-        # If you ever swap in a larger base model and DO need checkpointing,
-        # use the non-reentrant flavor:
-        #   gradient_checkpointing=True,
-        #   gradient_checkpointing_kwargs={"use_reentrant": False},
-        # AND call model.enable_input_require_grads() after PEFT wrap.
-        gradient_checkpointing=False,
+        # Gradient checkpointing: OFF by default (Qwen 0.5B + LoRA fits a T4
+        # comfortably without it). The reentrant flavor is buggy with PEFT
+        # — it stops requires_grad from propagating through the checkpoint
+        # boundary and crashes with:
+        #   RuntimeError: element 0 of tensors does not require grad ...
+        # On --tight-vram we enable the NON-reentrant flavor (TRL handles
+        # input-grad-require setup automatically when this is set).
+        gradient_checkpointing=bool(args.tight_vram),
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if args.tight_vram else None
+        ),
         report_to=["wandb"] if os.getenv("WANDB_API_KEY") else ["none"],
         seed=args.seed,
         **grpo_kwargs,
