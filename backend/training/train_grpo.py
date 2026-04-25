@@ -29,9 +29,18 @@ import random
 import sys
 from pathlib import Path
 
-# Make sibling packages importable when running from repo root
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "services" / "env-service" / "src"))
+# Make sibling packages importable whether or not editable pip-installs took.
+_REPO = Path(__file__).resolve().parents[2]
+_BACKEND = _REPO / "backend"
+for _p in (
+    _REPO,
+    _BACKEND / "packages" / "aria-contracts" / "src",
+    _BACKEND / "packages" / "aria-scenarios" / "src",
+    _BACKEND / "packages" / "aria-rewards" / "src",
+    _BACKEND / "services" / "env-service" / "src",
+):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from .reward_fn import make_reward_fn  # noqa: E402
 from .rollout import sample_prompt  # noqa: E402
