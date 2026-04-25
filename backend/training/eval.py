@@ -76,6 +76,23 @@ def _build_pick_fn(model_path: str, base_id: str):
 
 def evaluate(model_path: str, base_id: str, *, n_seeds: int = 5,
              ablate: tuple[str, ...] = (), out_dir: str = "./eval_out") -> dict:
+    # Friendly error if the checkpoint isn't there yet — common mistake when
+    # someone runs eval before the training cells in the Colab notebook
+    # have completed.
+    cfg = Path(model_path) / "adapter_config.json"
+    if not cfg.exists():
+        msg = (
+            f"\n\n  ✗ No trained checkpoint found at {model_path!r}\n"
+            f"    (looked for {cfg})\n\n"
+            f"    Did you run training first? In the Colab notebook, the order is:\n"
+            f"      Cell 5 — Run A (full reward)        — ~6h on T4\n"
+            f"      Cell 6 — Run B (ablate rh)          — ~6h on T4\n"
+            f"      Cell 7 — eval ← THIS step\n"
+            f"      Cell 8 — plot\n\n"
+            f"    Cell 7 only works after cells 5 + 6 have completed and produced\n"
+            f"    a `final/` directory containing `adapter_config.json`.\n"
+        )
+        raise SystemExit(msg)
     pick = _build_pick_fn(model_path, base_id)
     out = Path(out_dir)
     (out / "trajectories").mkdir(parents=True, exist_ok=True)

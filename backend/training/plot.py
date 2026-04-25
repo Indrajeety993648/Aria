@@ -73,6 +73,14 @@ def reward_curve(full_dir: Path, ablate_dir: Path, out_path: Path) -> None:
 def category_winrate(eval_full: Path, eval_abl: Path, baselines: Path | None,
                      out_path: Path) -> None:
     """Per-category bar chart: full / ablated / random / expert."""
+    for label, p in [("--eval-full", eval_full), ("--eval-ablate", eval_abl)]:
+        if not p.exists():
+            raise SystemExit(
+                f"\n  ✗ Missing {label}: {p}\n"
+                f"    Did you run `eval.py` for this checkpoint first?\n"
+                f"    Skip --eval-full / --eval-ablate to render only the\n"
+                f"    training reward curve from trainer_state.json.\n"
+            )
     full = json.loads(eval_full.read_text())
     abl = json.loads(eval_abl.read_text())
     baselines_data = json.loads(baselines.read_text()) if baselines and baselines.exists() else None
@@ -113,6 +121,16 @@ def main() -> int:
     p.add_argument("--out-dir", type=Path, default=Path("docs/assets"))
     args = p.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Friendly check up-front so we don't waste user's time
+    for label, d in [("--full-dir", args.full_dir), ("--ablate-dir", args.ablate_dir)]:
+        if not (d / "trainer_state.json").exists():
+            print(
+                f"\n  ⚠  No trainer_state.json in {label}={d}\n"
+                f"     This usually means the training run hasn't finished yet, OR\n"
+                f"     you're pointing at the wrong directory. Run `train_grpo.py`\n"
+                f"     first; the script writes trainer_state.json incrementally.\n"
+            )
 
     reward_curve(args.full_dir, args.ablate_dir, args.out_dir / "reward_curve.png")
     print(f"wrote {args.out_dir / 'reward_curve.png'}")
