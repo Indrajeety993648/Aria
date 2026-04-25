@@ -4,6 +4,7 @@ Everything re-exported here is considered public API and subject to semver.
 Version: 0.1.0
 """
 from aria_contracts.env import (
+    NUM_ACTIONS,
     ActionId,
     AriaAction,
     AriaObservation,
@@ -62,6 +63,7 @@ __all__ = [
     "MemoryNamespace",
     "MemoryQuery",
     "MemoryWrite",
+    "NUM_ACTIONS",
     "PendingTask",
     "RelationshipNode",
     "REWARD_WEIGHTS",
