@@ -137,6 +137,6 @@ spec:
 # Pointers to off-repo materials (HF blog post, video, etc.) once live.
 links:
   github: https://github.com/Indrajeety993648/Aria
-  hf_blog: https://huggingface.co/blog/<TBD>/aria-relationship-aware-agent
-  video: https://youtu.be/<TBD>
+  hf_blog: https://huggingface.co/blog/indra123/aria-relationship-aware-agent
+  video: https://youtu.be/REPLACE_AFTER_RECORDING
   paper_blog: docs/blog/HF_BLOG_DRAFT.md

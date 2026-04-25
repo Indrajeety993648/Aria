@@ -134,8 +134,8 @@ scripted_expert beats random by **+374 % relative**.
 ## Links
 
 - 📄 GitHub: https://github.com/Indrajeety993648/Aria
-- 📝 Blog post: https://huggingface.co/blog/<TBD>/aria
-- 🎥 Video walkthrough: https://youtu.be/<TBD>
+- 📝 Blog post: https://huggingface.co/blog/indra123/aria
+- 🎥 Video walkthrough: https://youtu.be/REPLACE_AFTER_RECORDING
 
 ## License
 

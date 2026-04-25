@@ -5,7 +5,7 @@
 
 [![tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)]() [![openenv](https://img.shields.io/badge/openenv-compliant-blue)]() [![reward](https://img.shields.io/badge/reward-6%20rubrics-orange)]() [![python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 
-**Submission links:** [HF Space](https://huggingface.co/spaces/<TBD>/aria-personal-manager-v1) · [HF Blog](https://huggingface.co/blog/<TBD>/aria-relationship-aware-agent) · [90-sec video](https://youtu.be/<TBD>) · [Slides](https://docs.google.com/<TBD>)
+**Submission links:** [HF Space](https://huggingface.co/spaces/indra123/aria-personal-manager-v1) · [HF Blog](https://huggingface.co/blog/indra123/aria-relationship-aware-agent) · [90-sec video](https://youtu.be/REPLACE_AFTER_RECORDING) · [Slides](https://docs.google.com/REPLACE_AFTER_DECK)
 
 ---
 

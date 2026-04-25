@@ -2,7 +2,7 @@
 title: "ARIA — Teaching LLM agents to complete tasks without damaging relationships"
 thumbnail: /blog/assets/aria/thumbnail.png
 authors:
-  - user: "<HF-handle-TBD>"
+  - user: "indra123"
 ---
 
 # Teaching LLM agents to complete tasks without damaging relationships
@@ -162,7 +162,7 @@ pip install openenv-core
 
 ```python
 from openenv.core.env_client import HTTPEnvClient
-env = HTTPEnvClient("https://huggingface.co/spaces/<TBD>/aria-personal-manager-v1")
+env = HTTPEnvClient("https://huggingface.co/spaces/indra123/aria-personal-manager-v1")
 obs = env.reset(seed=42, category="calendar_conflict", difficulty="medium")
 out = env.step({"action_id": 8, "target_id": "conflict_personal"})  # RESOLVE_CONFLICT
 print(out.reward)
@@ -183,8 +183,8 @@ and that's what the next generation of LLM agents has to learn.
 ## Links
 
 - 🔗 GitHub: <https://github.com/Indrajeety993648/Aria>
-- 🤗 HF Space: <https://huggingface.co/spaces/<TBD>/aria-personal-manager-v1>
-- 🎥 90-second walkthrough: <https://youtu.be/<TBD>>
-- 🪧 Slides: <https://docs.google.com/<TBD>>
+- 🤗 HF Space: <https://huggingface.co/spaces/indra123/aria-personal-manager-v1>
+- 🎥 90-second walkthrough: <https://youtu.be/REPLACE_AFTER_RECORDING>
+- 🪧 Slides: <https://docs.google.com/REPLACE_AFTER_DECK>
 
 Built for the Meta PyTorch OpenEnv Hackathon 2026 · Theme #3 World Modeling.

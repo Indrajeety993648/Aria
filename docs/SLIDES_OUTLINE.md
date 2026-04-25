@@ -163,10 +163,10 @@ Visual: per-category bar chart from `docs/assets/baseline_category_means.png`, w
 ## Slide 11 — Try it
 
 ```
-HF Space:  huggingface.co/spaces/<TBD>/aria-personal-manager-v1
+HF Space:  huggingface.co/spaces/indra123/aria-personal-manager-v1
 GitHub:    github.com/Indrajeety993648/Aria
 Colab:     backend/training/aria_train_colab.ipynb
-Blog:      huggingface.co/blog/<TBD>/aria
+Blog:      huggingface.co/blog/indra123/aria
 ```
 
 Visual: QR code linking to HF Space.
