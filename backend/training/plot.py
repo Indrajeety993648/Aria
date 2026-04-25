@@ -25,11 +25,34 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def _load_log(path: Path) -> tuple[list[int], list[float]]:
-    """Read `trainer_state.json` and pull (step, reward) tuples."""
-    if not path.exists():
+def _find_trainer_state(output_dir: Path) -> Path | None:
+    """TRL/HF writes trainer_state.json into checkpoint-N/ and final/ subdirs,
+    not into output_dir/ directly. Find the one with the longest log_history.
+    """
+    candidates = [output_dir / "trainer_state.json",
+                  output_dir / "final" / "trainer_state.json"]
+    candidates.extend(sorted(output_dir.glob("checkpoint-*/trainer_state.json")))
+    best: Path | None = None
+    best_len = -1
+    for c in candidates:
+        if not c.exists():
+            continue
+        try:
+            n = len(json.loads(c.read_text()).get("log_history", []))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if n > best_len:
+            best, best_len = c, n
+    return best
+
+
+def _load_log(output_dir: Path) -> tuple[list[int], list[float]]:
+    """Read trainer_state.json from any checkpoint dir under `output_dir`
+    and pull (step, reward) tuples from log_history."""
+    p = _find_trainer_state(output_dir)
+    if p is None:
         return [], []
-    state = json.loads(path.read_text())
+    state = json.loads(p.read_text())
     history = state.get("log_history", [])
     steps, rewards = [], []
     for row in history:
@@ -47,8 +70,8 @@ def _smooth(values: list[float], window: int = 10) -> list[float]:
 
 
 def reward_curve(full_dir: Path, ablate_dir: Path, out_path: Path) -> None:
-    full_steps, full_rew = _load_log(full_dir / "trainer_state.json")
-    abl_steps, abl_rew = _load_log(ablate_dir / "trainer_state.json")
+    full_steps, full_rew = _load_log(full_dir)
+    abl_steps, abl_rew = _load_log(ablate_dir)
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
     if full_rew:
@@ -124,9 +147,10 @@ def main() -> int:
 
     # Friendly check up-front so we don't waste user's time
     for label, d in [("--full-dir", args.full_dir), ("--ablate-dir", args.ablate_dir)]:
-        if not (d / "trainer_state.json").exists():
+        if _find_trainer_state(d) is None:
             print(
-                f"\n  ⚠  No trainer_state.json in {label}={d}\n"
+                f"\n  ⚠  No trainer_state.json under {label}={d}\n"
+                f"     (searched: {d}/, {d}/final/, {d}/checkpoint-*/)\n"
                 f"     This usually means the training run hasn't finished yet, OR\n"
                 f"     you're pointing at the wrong directory. Run `train_grpo.py`\n"
                 f"     first; the script writes trainer_state.json incrementally.\n"
