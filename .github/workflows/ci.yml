@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install ARIA packages + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e backend/packages/aria-contracts
+          pip install -e backend/packages/aria-scenarios
+          pip install -e backend/packages/aria-rewards
+          pip install -e backend/services/env-service
+          pip install -e backend/services/orchestrator-service
+          pip install pytest pytest-asyncio httpx
+
+      - name: Unit tests — packages
+        run: pytest backend/packages -q
+
+      - name: Env grader suite
+        run: pytest backend/tests/env -q
+
+      - name: Env grader suite (incl. real HTTP server)
+        run: pytest backend/tests/env -q --run-http
+
+      - name: Orchestrator tests
+        run: pytest backend/services/orchestrator-service/tests -q
+
+      - name: Baseline grade — expert must beat random
+        run: python backend/baselines/run_grade.py --n 10
