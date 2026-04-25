@@ -18,17 +18,19 @@
 **Mission:** Guard the shared contracts, the docker-compose topology, and the "no two services own the same thing" rule.
 
 **Owns:**
-- `backend/docker-compose.yml`, `backend/docker-compose.dev.yml`
-- `backend/Makefile`
+- `backend/docker-compose.yml`
+- Root `Makefile`
 - `backend/packages/aria-contracts/**`
 - `skills.md` (this file)
 - Root `README.md`, `.env.example`, `.gitignore`
+- `.github/workflows/**`
 
 **Never touches:** service internals beyond their Dockerfile and port numbers.
 
 **Definition of done:**
 - `docker compose -f backend/docker-compose.yml build` completes on a clean machine in <10 min
 - Every service imports `aria-contracts` and no other cross-service module
+- `.github/workflows/ci.yml` green on main (tests + grade baseline)
 
 ---
 

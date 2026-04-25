@@ -29,6 +29,7 @@ install:
 	. .venv/bin/activate && pip install -e backend/packages/aria-scenarios
 	. .venv/bin/activate && pip install -e backend/packages/aria-rewards
 	. .venv/bin/activate && pip install -e "backend/services/env-service[dev]"
+	. .venv/bin/activate && pip install -e backend/services/orchestrator-service
 	. .venv/bin/activate && pip install pytest pytest-asyncio httpx ruff mypy
 
 build:

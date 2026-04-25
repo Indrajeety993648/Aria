@@ -77,4 +77,3 @@ Start here → [skills.md](./skills.md). Every contributor and every sub-agent r
 ---
 
 *Built for Meta PyTorch OpenEnv Hackathon 2026 · Theme #3 · April 2026*
-# Aria
