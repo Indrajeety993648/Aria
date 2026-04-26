@@ -14,8 +14,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from itertools import product
 from pathlib import Path
 from statistics import mean, stdev
+
+from tqdm.auto import tqdm
 
 # Make sibling packages importable whether or not editable pip-installs took.
 _REPO = Path(__file__).resolve().parents[2]
@@ -97,28 +100,32 @@ def evaluate(model_path: str, base_id: str, *, n_seeds: int = 5,
     out = Path(out_dir)
     (out / "trajectories").mkdir(parents=True, exist_ok=True)
     summary: dict = {}
-    for cat in CATEGORIES:
-        for diff in DIFFICULTIES:
-            rewards: list[float] = []
-            for seed in range(n_seeds):
-                trips = trajectory(
-                    pick, seed=seed, category=cat, difficulty=diff,
-                    ablate_dimensions=ablate,
-                )
-                ep_total = sum(r for _, _, r in trips)
-                rewards.append(ep_total)
-                # Save trajectory for the qualitative panel
-                traj_path = out / "trajectories" / f"{cat}_{diff}_seed{seed:02d}.json"
-                traj_path.write_text(json.dumps([
-                    {"action_id": a.action_id, "target_id": a.target_id,
-                     "payload": a.payload, "reward": r}
-                    for _, a, r in trips
-                ], indent=2))
-            summary[f"{cat}/{diff}"] = {
-                "n": len(rewards),
-                "mean": mean(rewards),
-                "std": stdev(rewards) if len(rewards) > 1 else 0.0,
-            }
+    cells = list(product(CATEGORIES, DIFFICULTIES))
+    total = len(cells) * n_seeds
+    pbar = tqdm(total=total, desc="eval", unit="ep")
+    for cat, diff in cells:
+        rewards: list[float] = []
+        for seed in range(n_seeds):
+            trips = trajectory(
+                pick, seed=seed, category=cat, difficulty=diff,
+                ablate_dimensions=ablate,
+            )
+            ep_total = sum(r for _, _, r in trips)
+            rewards.append(ep_total)
+            traj_path = out / "trajectories" / f"{cat}_{diff}_seed{seed:02d}.json"
+            traj_path.write_text(json.dumps([
+                {"action_id": a.action_id, "target_id": a.target_id,
+                 "payload": a.payload, "reward": r}
+                for _, a, r in trips
+            ], indent=2))
+            pbar.set_postfix_str(f"{cat}/{diff} r={ep_total:+.2f}")
+            pbar.update(1)
+        summary[f"{cat}/{diff}"] = {
+            "n": len(rewards),
+            "mean": mean(rewards),
+            "std": stdev(rewards) if len(rewards) > 1 else 0.0,
+        }
+    pbar.close()
     (out / "eval_summary.json").write_text(json.dumps(summary, indent=2))
     return summary
 
