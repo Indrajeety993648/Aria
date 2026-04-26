@@ -134,7 +134,7 @@ scripted_expert beats random by **+374 % relative**.
 ## Links
 
 - 📄 GitHub: https://github.com/Indrajeety993648/Aria
-- 📝 Blog post: https://huggingface.co/blog/indra123/aria
+- 📝 Blog post: https://huggingface.co/blog/indra123/aria-relationship-aware-agent
 - 🎥 Video walkthrough: https://youtu.be/REPLACE_AFTER_RECORDING
 
 ## License
